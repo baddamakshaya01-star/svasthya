@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+.pytest_cache/
+.env
+*.db
+*.joblib
+frontend/node_modules/
+frontend/dist/
+blazex/alerts.db

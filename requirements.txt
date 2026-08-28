@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pydantic
+pytest
+httpx
+pandas
+scikit-learn
+xgboost
+joblib
+twilio
+python-dotenv

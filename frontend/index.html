@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BlazeX: Heatwave Early Warning System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+    <link rel="stylesheet" href="/style.css">
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  </head>
+  <body>
+    <div id="app">
+      <header class="navbar glass">
+        <div class="logo">🔥 BlazeX <span class="badge">Early Warning</span></div>
+        <div class="nav-links">
+          <a href="#" class="active">Dashboard</a>
+          <a href="#">Wards</a>
+          <a href="#">Alerts</a>
+        </div>
+      </header>
+
+      <main class="dashboard-container">
+        
+        <!-- Main Forecast Grid -->
+        <section class="forecast-section">
+          <div class="section-header map-header">
+            <div>
+              <h2>City Ward Risk Overview</h2>
+              <p>Real-time predictive thermal stress & hospitalization risk.</p>
+            </div>
+            <div class="time-slider-container">
+              <label for="time-slider" id="day-label">Day 0 (Today)</label>
+              <input type="range" id="time-slider" min="0" max="4" value="0" step="1">
+            </div>
+          </div>
+          
+          <div id="map-container" class="map-container glass">
+            <div id="map"></div>
+          </div>
+        </section>
+
+        <!-- Alerting Feed Sidebar -->
+        <aside class="alerts-sidebar">
+          <div class="section-header">
+            <h2>Alert Feed <span class="ping"></span></h2>
+          </div>
+          <div id="alerts-container" class="alerts-container">
+            <!-- Alerts injected dynamically -->
+          </div>
+        </aside>
+
+      </main>
+    </div>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
