@@ -190,7 +190,7 @@ def get_ward_risk_forecast():
     
     for ward in wards:
         forecasts = []
-        for day in range(5):
+        for day in range(7):
             temp = ward["base_temp"] + random.uniform(-1.0, 2.0) + (day * 0.5)
             rh = random.uniform(40.0, 70.0) - (day * 1.5)
             wind = random.uniform(1.0, 5.0)

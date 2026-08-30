@@ -4,56 +4,413 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BlazeX: Heatwave Early Warning System</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <title>Nivara Enterprise Dashboard</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
     <link rel="stylesheet" href="/style.css">
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body>
-    <div id="app">
-      <header class="navbar glass">
-        <div class="logo">🔥 BlazeX <span class="badge">Early Warning</span></div>
-        <div class="nav-links">
-          <a href="#" class="active">Dashboard</a>
-          <a href="#">Wards</a>
-          <a href="#">Alerts</a>
-        </div>
-      </header>
+    <!-- Background Layer -->
+    <div class="sky-background"></div>
 
-      <main class="dashboard-container">
-        
-        <!-- Main Forecast Grid -->
-        <section class="forecast-section">
-          <div class="section-header map-header">
-            <div>
-              <h2>City Ward Risk Overview</h2>
-              <p>Real-time predictive thermal stress & hospitalization risk.</p>
+    <div id="app">
+      
+      <!-- LOGIN VIEW -->
+      <div id="login-view" class="view-container">
+        <div class="login-card glass-panel">
+          <div class="login-header">
+            <div class="language-selector" style="text-align: right; margin-bottom: 15px;">
+              <select id="lang-select" style="padding: 5px; border-radius: 5px; border: 1px solid #cbd5e1; outline: none; font-size: 12px; cursor: pointer;">
+                <option value="en">English</option>
+                <option value="hi">हिंदी (Hindi)</option>
+                <option value="te">తెలుగు (Telugu)</option>
+              </select>
             </div>
-            <div class="time-slider-container">
-              <label for="time-slider" id="day-label">Day 0 (Today)</label>
-              <input type="range" id="time-slider" min="0" max="4" value="0" step="1">
+            <div class="logo-icon-img" style="text-align: center; margin-bottom: 15px;">
+              <img src="/logo.jpg" alt="Tapa-Svasthya Logo" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 2px solid white;">
+            </div>
+            <h1 data-i18n="tapa_svasthya" style="display: none;">Tapa-Svasthya</h1>
+            <h3 data-i18n="welcome_tapa_svasthya" style="color: var(--primary-blue); font-weight: 600; margin-top: -5px; margin-bottom: 10px;">Welcome to Tapa-Svasthya</h3>
+            <p data-i18n="sign_in">Sign in to your account</p>
+          </div>
+          
+          <form id="login-form">
+            <div class="input-group">
+              <label for="username">User Name</label>
+              <div class="input-wrapper">
+                <i class="fa-regular fa-user"></i>
+                <input type="text" id="username" placeholder="Enter your user name" required>
+              </div>
+            </div>
+            
+            <div class="input-group">
+              <label for="age">Age</label>
+              <div class="input-wrapper">
+                <i class="fa-regular fa-calendar"></i>
+                <input type="number" id="age" placeholder="Enter your age" required>
+              </div>
+            </div>
+            
+            <div class="input-group">
+              <label for="diseases" data-i18n="any_health_issues">Any Health Issues</label>
+              <div class="input-wrapper">
+                <i class="fa-solid fa-notes-medical"></i>
+                <input type="text" id="diseases" data-i18n-placeholder="enter_health_issues" placeholder="Enter any health issues">
+              </div>
+            </div>
+            
+            <button type="submit" class="btn-primary">
+              Continue to Dashboard <i class="fa-solid fa-arrow-right"></i>
+            </button>
+          </form>
+          
+          <div class="login-footer">
+            <p>Don't have an account? <a href="#">Sign up</a></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- DASHBOARD VIEW -->
+      <div id="dashboard-view" class="view-container" style="display: none;">
+        
+        <!-- Sidebar -->
+        <aside class="sidebar">
+          <div class="sidebar-brand">
+            <div class="brand-icon"><img src="/logo.jpg" alt="Logo" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+            <div class="brand-text">
+              <h2>Tapa-Svasthya</h2>
+              <p data-i18n="dashboard_subtitle">Dashboard</p>
             </div>
           </div>
           
-          <div id="map-container" class="map-container glass">
-            <div id="map"></div>
-          </div>
-        </section>
-
-        <!-- Alerting Feed Sidebar -->
-        <aside class="alerts-sidebar">
-          <div class="section-header">
-            <h2>Alert Feed <span class="ping"></span></h2>
-          </div>
-          <div id="alerts-container" class="alerts-container">
-            <!-- Alerts injected dynamically -->
+          <nav class="sidebar-nav">
+            <a href="#" class="nav-item active" data-view="view-home"><i class="fa-solid fa-house"></i> <span data-i18n="nav_home">Home</span></a>
+            <a href="#" class="nav-item" data-view="view-weather"><i class="fa-solid fa-cloud-sun"></i> <span data-i18n="nav_weather">Weather</span></a>
+            <a href="#" class="nav-item" data-view="view-stress"><i class="fa-solid fa-heart-pulse"></i> <span data-i18n="nav_stress">Stress Analytics</span></a>
+            <a href="#" class="nav-item" data-view="view-ward"><i class="fa-solid fa-map-location-dot"></i> <span data-i18n="nav_ward">Ward Analysis</span></a>
+            <a href="#" class="nav-item" data-view="view-history"><i class="fa-solid fa-clock-rotate-left"></i> <span data-i18n="nav_history">AI Chatbot History</span></a>
+            <a href="#" class="nav-item" data-view="view-advices"><i class="fa-solid fa-notes-medical"></i> <span data-i18n="nav_advices">Health Advices</span></a>
+          </nav>
+          
+          <div class="sidebar-footer">
+            <a href="#" class="nav-item"><i class="fa-solid fa-gear"></i> <span data-i18n="nav_settings">Settings</span></a>
           </div>
         </aside>
 
-      </main>
+        <!-- Main Content -->
+        <main class="main-content">
+          <!-- Top Bar -->
+          <header class="topbar">
+            <div class="search-bar" style="position: relative;">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="search-input" data-i18n-placeholder="search" placeholder="Search wards..." autocomplete="off">
+              <div id="search-results" style="position: absolute; top: 100%; left: 0; width: 100%; background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 1000; display: none; max-height: 200px; overflow-y: auto;"></div>
+            </div>
+            
+            <div class="quick-links">
+              <span id="last-updated" style="font-size: 12px; color: var(--text-light); margin-right: 15px; font-weight: 600;">Last Updated: Just now</span>
+              <button class="quick-link-btn" data-modal="precautions"><i class="fa-solid fa-shield-heart"></i> <span data-i18n="precautions">Precautions</span></button>
+              <button class="quick-link-btn" data-modal="safety"><i class="fa-solid fa-hard-hat"></i> <span data-i18n="safety">Safety</span></button>
+              <button class="quick-link-btn" data-modal="symptoms"><i class="fa-solid fa-thermometer"></i> <span data-i18n="symptoms">Symptoms</span></button>
+              <button class="quick-link-btn" data-modal="alerts"><i class="fa-solid fa-bell"></i> <span data-i18n="alerts">Alerts</span></button>
+            </div>
+
+            <div class="topbar-actions">
+              <select id="dash-lang-select" style="padding: 5px; border-radius: 5px; border: 1px solid #cbd5e1; outline: none; font-size: 12px; cursor: pointer; margin-right: 15px;">
+                <option value="en">English</option>
+                <option value="hi">हिंदी (Hindi)</option>
+                <option value="te">తెలుగు (Telugu)</option>
+              </select>
+              <button class="icon-btn"><i class="fa-regular fa-bell"></i></button>
+              <div class="profile-dropdown-container">
+                <button class="icon-btn profile-btn" id="profile-toggle"><i class="fa-regular fa-circle-user"></i></button>
+                <div class="profile-dropdown" id="profile-dropdown" style="display: none;">
+                  <div class="dropdown-header">
+                    <strong data-i18n="current_user">Current User</strong>
+                  </div>
+                  <button id="logout-btn"><i class="fa-solid fa-arrow-right-from-bracket"></i> <span data-i18n="logout">Logout</span></button>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <!-- Views Container -->
+          <div class="views-wrapper">
+            
+            <!-- Home View -->
+            <div id="view-home" class="dashboard-view-content active-view">
+              <div class="home-header" style="margin-bottom: 20px;">
+                <h2 style="font-size: 24px; color: #0c4a6e; font-weight: 700;"><span data-i18n="welcome_tapa_svasthya">Welcome to Tapa-Svasthya</span></h2>
+              </div>
+              <div class="dashboard-grid">
+            
+            <!-- Heat Stress Index Widget (Replaces Weather) -->
+            <div class="widget glass-panel stress-mini-widget" style="text-align: center; display: flex; flex-direction: column; justify-content: center;">
+              <div class="stat-header" style="justify-content: center; margin-bottom: 15px;">
+                <span data-i18n="stress_index_title">Heat Stress Index</span>
+              </div>
+              <div class="gauge-container" style="position: relative; width: 120px; height: 60px; margin: 0 auto; overflow: hidden;">
+                <div style="width: 120px; height: 120px; border-radius: 50%; border: 15px solid #e2e8f0; border-bottom-color: transparent; border-right-color: transparent; transform: rotate(45deg); box-sizing: border-box; position: absolute; top: 0; left: 0;"></div>
+                <div id="home-stress-gauge-fill" style="width: 120px; height: 120px; border-radius: 50%; border: 15px solid #10b981; border-bottom-color: transparent; border-right-color: transparent; transform: rotate(45deg); box-sizing: border-box; position: absolute; top: 0; left: 0; transition: all 0.5s ease;"></div>
+              </div>
+              <h2 id="home-stress-val" style="margin-top: 10px;">Low</h2>
+            </div>
+
+            <!-- 7-Day Forecast Map Widget (Moved back to Home) -->
+            <div class="widget glass-panel map-widget-container">
+              <div class="map-header">
+                <h3 data-i18n="widget_forecast_map">7-Day Regional Forecast</h3>
+                <div class="map-tabs">
+                  <span class="active" data-i18n="regional_map">Regional Map</span>
+                </div>
+              </div>
+              <div id="forecast-page-map" style="height: 350px;"></div>
+              
+              <!-- Floating Slider inside map container -->
+              <div class="floating-slider">
+                <label for="forecast-page-slider" id="forecast-page-day-label" data-i18n="forecast_day_0">Forecast: Day 0 (Today)</label>
+                <input type="range" id="forecast-page-slider" min="0" max="6" value="0" step="1">
+              </div>
+            </div>
+
+            <!-- Humidity Widget -->
+            <div class="widget glass-panel stat-widget">
+              <div class="stat-header">
+                <span data-i18n="widget_humidity">HUMIDITY</span>
+                <i class="fa-solid fa-droplet" style="color: #4facfe;"></i>
+              </div>
+              <div class="stat-body">
+                <h2 id="humidity-val">45%</h2>
+                <div class="progress-bar"><div class="progress" style="width: 45%;"></div></div>
+              </div>
+            </div>
+
+            <!-- Stress Index Widget moved to dedicated page -->
+
+            <!-- Wind Speed Widget -->
+            <div class="widget glass-panel stat-widget">
+              <div class="stat-header">
+                <span data-i18n="widget_wind">WIND SPEED</span>
+                <i class="fa-solid fa-wind" style="color: #4facfe;"></i>
+              </div>
+              <div class="stat-body">
+                <h2 id="wind-val">12 mph</h2>
+                <p>North-West</p>
+              </div>
+            </div>
+
+            <!-- AQI Widget -->
+            <div class="widget glass-panel aqi-widget">
+              <div class="aqi-header">
+                <h3 data-i18n="widget_aqi">Air Quality Index</h3>
+                <span class="badge badge-good" data-i18n="aqi_good">Good</span>
+              </div>
+              <div class="aqi-body">
+                <h1 id="aqi-val">42</h1>
+                <p data-i18n="aqi_desc">Air quality is considered satisfactory, and air pollution poses little or no risk.</p>
+              </div>
+            </div>
+
+            <!-- 7-Day Forecast Widget -->
+            <div class="widget glass-panel forecast-list-widget" style="grid-column: span 1; display: flex; flex-direction: column;">
+              <div class="stat-header" style="margin-bottom: 15px; display: flex; justify-content: space-between;">
+                <h3 style="margin:0; font-size: 16px;" data-i18n="widget_7day">7-Day Forecast</h3>
+                <i class="fa-regular fa-calendar" style="color: var(--primary-blue);"></i>
+              </div>
+              <div id="home-forecast-list" style="display: flex; flex-direction: column; gap: 15px; flex: 1;">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+
+            <!-- Thermal Indices Widget -->
+            <div class="widget glass-panel thermal-indices-widget" style="grid-column: span 2; display: flex; flex-direction: column;">
+              <div class="stat-header" style="margin-bottom: 20px; display: flex; justify-content: space-between;">
+                <h3 style="margin:0; font-size: 16px;" data-i18n="widget_thermal">Thermal Indices</h3>
+                <i class="fa-solid fa-temperature-half" style="color: #ef4444;"></i>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 20px; justify-content: center; flex: 1;">
+                
+                <!-- WBGT -->
+                <div>
+                  <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; margin-bottom: 5px;">
+                    <span data-i18n="wbgt_label">WBGT</span>
+                    <span id="home-wbgt-val">--°C</span>
+                  </div>
+                  <div class="progress-bar" style="height: 8px; background: #e2e8f0; border-radius: 4px;"><div id="home-wbgt-progress" class="progress" style="width: 0%; background: #b91c1c; border-radius: 4px;"></div></div>
+                </div>
+                
+                <!-- Heat Index -->
+                <div>
+                  <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; margin-bottom: 5px;">
+                    <span data-i18n="hi_label">Heat Index (HI)</span>
+                    <span id="home-hi-val">--°C</span>
+                  </div>
+                  <div class="progress-bar" style="height: 8px; background: #e2e8f0; border-radius: 4px;"><div id="home-hi-progress" class="progress" style="width: 0%; background: #0ea5e9; border-radius: 4px;"></div></div>
+                </div>
+
+                <!-- UTCI -->
+                <div>
+                  <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; margin-bottom: 5px;">
+                    <span data-i18n="utci_label">UTCI</span>
+                    <span id="home-utci-val">--°C</span>
+                  </div>
+                  <div class="progress-bar" style="height: 8px; background: #e2e8f0; border-radius: 4px;"><div id="home-utci-progress" class="progress" style="width: 0%; background: #475569; border-radius: 4px;"></div></div>
+                </div>
+                
+              </div>
+            </div>
+
+          </div> <!-- End Dashboard Grid -->
+          </div> <!-- End Home View -->
+
+          <!-- Separate Page Views (Hidden by default) -->
+
+          <!-- Weather View (NEW) -->
+          <div id="view-weather" class="dashboard-view-content" style="display: none; padding: 20px;">
+            <div class="glass-panel" style="padding: 20px; border-radius: 16px; max-width: 400px; margin: 0 auto;">
+              <h2 style="margin-bottom: 20px;"><i class="fa-solid fa-cloud-sun"></i> <span data-i18n="widget_weather">Weather</span></h2>
+              <div class="weather-top" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div>
+                  <p data-i18n="widget_conditions" style="color: #64748b; font-weight: 500;">Current Conditions</p>
+                </div>
+                <i class="fa-solid fa-cloud weather-icon" style="font-size: 48px; color: #4facfe;"></i>
+              </div>
+              <div class="weather-bottom">
+                <h1 id="weather-page-temp" style="font-size: 64px; font-weight: 700;">72°F</h1>
+                <p id="weather-page-desc" style="font-size: 16px; color: #475569;">Partly Cloudy, Seattle</p>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Ward Analysis View -->
+          <div id="view-ward" class="dashboard-view-content" style="display: none; padding: 20px;">
+            <div class="glass-panel" style="padding: 20px; border-radius: 16px;">
+              <h2 data-i18n="ward_analysis_title">Ward Analysis (Detailed)</h2>
+              <p style="margin-bottom: 20px; color: #64748b;" data-i18n="ward_analysis_desc">Deep dive into specific wards across the city.</p>
+              <div class="ward-selector" style="margin-bottom: 20px;">
+                <label for="ward-page-select" style="font-weight: 600; margin-right: 10px;" data-i18n="select_ward">Select Ward:</label>
+                <select id="ward-page-select" style="padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; outline: none; font-size: 14px;">
+                  <option value="all" data-i18n="city_average">City Average</option>
+                </select>
+              </div>
+              <div class="chart-container" style="height: 400px;">
+                <canvas id="wardPageChart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Stress Analytics View (NEW) -->
+          <div id="view-stress" class="dashboard-view-content" style="display: none; padding: 20px;">
+            <div class="glass-panel" style="padding: 40px; border-radius: 16px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 400px;">
+              <h2><i class="fa-solid fa-heart-pulse"></i> <span data-i18n="stress_index_title">Heat Stress Index</span></h2>
+              <p style="margin-bottom: 40px; color: #64748b;" data-i18n="stress_index_desc">Unified biological stress metric based on Composite Risk Score.</p>
+              
+              <div class="gauge-container" style="position: relative; width: 240px; height: 120px; margin: 0 auto; overflow: hidden;">
+                <!-- CSS semi-circle gauge (Double Size) -->
+                <div style="width: 240px; height: 240px; border-radius: 50%; border: 30px solid #e2e8f0; border-bottom-color: transparent; border-right-color: transparent; transform: rotate(45deg); box-sizing: border-box; position: absolute; top: 0; left: 0;"></div>
+                <!-- The dynamic fill -->
+                <div id="stress-gauge-fill" style="width: 240px; height: 240px; border-radius: 50%; border: 30px solid #10b981; border-bottom-color: transparent; border-right-color: transparent; transform: rotate(45deg); box-sizing: border-box; position: absolute; top: 0; left: 0; transition: all 0.5s ease;"></div>
+              </div>
+              <h1 id="stress-val" style="font-size: 48px; font-weight: 700; margin-top: 20px;">Low</h1>
+              <p id="stress-desc" style="font-size: 18px; color: var(--text-dark); margin-top: 10px; max-width: 400px;">Safe limits. Normal activities.</p>
+            </div>
+          </div>
+
+          <!-- AI Chat History View -->
+          <div id="view-history" class="dashboard-view-content" style="display: none; padding: 20px;">
+            <div class="glass-panel" style="padding: 20px; border-radius: 16px; height: calc(100vh - 120px); display: flex; flex-direction: column;">
+              <h2 data-i18n="chat_history_title">AI Chatbot History</h2>
+              <p style="margin-bottom: 20px; color: #64748b;" data-i18n="chat_history_desc">Review your past conversations with the Tapa-Svasthya AI.</p>
+              
+              <div id="page-chat-history" class="chatbot-messages" style="flex: 1; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 20px; background: white;">
+                <!-- Filled via JS from localStorage -->
+              </div>
+              
+              <button id="clear-chat-btn" class="btn-primary" style="background: #ef4444; width: max-content;"><i class="fa-solid fa-trash"></i> <span data-i18n="clear_history">Clear History</span></button>
+            </div>
+          </div>
+
+          <!-- Health Advices View -->
+          <div id="view-advices" class="dashboard-view-content" style="display: none; padding: 20px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+              
+              <div class="glass-panel" style="padding: 20px; border-radius: 16px;">
+                <h3 style="color: var(--primary-blue); font-size: 18px; margin-bottom: 15px;"><i class="fa-solid fa-shield-heart"></i> <span data-i18n="precautions">Precautions</span></h3>
+                <ul style="padding-left: 20px; line-height: 1.6;" data-i18n-html="precautions_content">
+                  <li>Drink plenty of water even if you do not feel thirsty.</li>
+                  <li>Wear loose, lightweight, light-colored clothing.</li>
+                  <li>Limit outdoor activity, especially midday when the sun is hottest.</li>
+                  <li>Check on family, friends, and neighbors who do not have air conditioning.</li>
+                </ul>
+              </div>
+
+              <div class="glass-panel" style="padding: 20px; border-radius: 16px;">
+                <h3 style="color: var(--primary-blue); font-size: 18px; margin-bottom: 15px;"><i class="fa-solid fa-hard-hat"></i> <span data-i18n="safety">Safety Measures</span></h3>
+                <ul style="padding-left: 20px; line-height: 1.6;" data-i18n-html="safety_content">
+                  <li>Never leave children or pets in a closed, parked vehicle.</li>
+                  <li>If you must work outdoors, use a buddy system and take frequent breaks.</li>
+                  <li>Seek medical care immediately if you have symptoms of heat illness.</li>
+                  <li>Know where your nearest municipal cooling center is located.</li>
+                </ul>
+              </div>
+
+              <div class="glass-panel" style="padding: 20px; border-radius: 16px;">
+                <h3 style="color: var(--primary-blue); font-size: 18px; margin-bottom: 15px;"><i class="fa-solid fa-thermometer"></i> <span data-i18n="symptoms">Symptoms</span></h3>
+                <ul style="padding-left: 20px; line-height: 1.6;" data-i18n-html="symptoms_content">
+                  <li><b>Heat Exhaustion:</b> Heavy sweating, weakness, cold/pale/clammy skin, fast/weak pulse, nausea, fainting.</li>
+                  <li><b>Heat Stroke (EMERGENCY):</b> High body temperature (103°F+), hot/red/dry skin, rapid/strong pulse, confusion, loss of consciousness.</li>
+                </ul>
+              </div>
+
+            </div>
+          </div>
+          
+          </div> <!-- End views-wrapper -->
+        </main>
+      </div>
+
+      <!-- AI Chatbot Floating Button & Window -->
+      <button id="chatbot-toggle" class="chatbot-toggle">
+        <i class="fa-solid fa-robot"></i>
+      </button>
+
+      <!-- Info Modal (Hidden by default) -->
+      <div id="info-modal-overlay" class="modal-overlay" style="display: none;">
+        <div class="info-modal glass-panel">
+          <div class="modal-header">
+            <h2 id="modal-title">Title</h2>
+            <button id="modal-close"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          <div class="modal-body" id="modal-body">
+            Content goes here...
+          </div>
+        </div>
+      </div>
+
+      <div id="chatbot-window" class="chatbot-window glass-panel" style="display: none;">
+        <div class="chatbot-header">
+          <h3><i class="fa-solid fa-robot"></i> <span data-i18n="ai_assistant">AI Assistant</span></h3>
+          <button id="chatbot-close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="chatbot-messages" id="chatbot-messages">
+          <div class="message ai-message">Hello! How can I help you today?</div>
+        </div>
+        <div class="chatbot-input">
+          <input type="text" id="chat-input-field" placeholder="Type a message...">
+          <button id="chat-send-btn"><i class="fa-solid fa-paper-plane"></i></button>
+        </div>
+      </div>
+
     </div>
     <script type="module" src="/main.js"></script>
   </body>
