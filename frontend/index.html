@@ -62,6 +62,14 @@
             </div>
             
             <div class="input-group">
+              <label for="occupation" data-i18n="occupation_label">Occupation</label>
+              <div class="input-wrapper">
+                <i class="fa-solid fa-briefcase"></i>
+                <input type="text" id="occupation" data-i18n-placeholder="enter_occupation" placeholder="Enter your occupation (e.g., Construction Worker)" required>
+              </div>
+            </div>
+            
+            <div class="input-group">
               <label for="diseases" data-i18n="any_health_issues">Any Health Issues</label>
               <div class="input-wrapper">
                 <i class="fa-solid fa-notes-medical"></i>
@@ -267,6 +275,17 @@
                   <div class="progress-bar" style="height: 8px; background: #e2e8f0; border-radius: 4px;"><div id="home-utci-progress" class="progress" style="width: 0%; background: #475569; border-radius: 4px;"></div></div>
                 </div>
                 
+              </div>
+            </div>
+
+            <!-- Occupation Advice Widget -->
+            <div class="widget glass-panel" style="grid-column: 1 / -1; display: flex; flex-direction: column; padding: 25px; margin-top: 10px;">
+              <div class="stat-header" style="margin-bottom: 15px; display: flex; justify-content: space-between;">
+                <h3 style="margin:0; font-size: 16px; color: var(--primary-blue);" id="occupation-advice-title">Personalized Health Advice</h3>
+                <i class="fa-solid fa-user-doctor" style="color: var(--primary-blue);"></i>
+              </div>
+              <div style="font-size: 14px; line-height: 1.6; color: var(--text-dark);" id="occupation-advice-content">
+                Please enter your occupation during login to receive personalized health advices.
               </div>
             </div>
 

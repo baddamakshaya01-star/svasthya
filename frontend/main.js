@@ -266,6 +266,10 @@ loginForm.addEventListener('submit', (e) => {
   e.preventDefault();
   loginView.style.display = 'none';
   dashboardView.style.display = 'flex';
+  
+  const occupation = document.getElementById('occupation').value.trim();
+  generateOccupationAdvice(occupation);
+  
   if (!dashboardInitialized) {
     initDashboard();
     dashboardInitialized = true;
@@ -444,6 +448,26 @@ quickLinks.forEach(btn => {
   });
 });
 
+function generateOccupationAdvice(occ) {
+  const occLower = occ.toLowerCase();
+  const adviceContent = document.getElementById('occupation-advice-content');
+  if (!adviceContent) return;
+
+  let advice = "";
+  if (occLower.includes('construct') || occLower.includes('build') || occLower.includes('labor') || occLower.includes('mason')) {
+    advice = "<strong>High Risk (Outdoor Labor):</strong> Take frequent breaks in shaded or cooled areas. Hydrate constantly (at least 1 cup every 20 minutes) even if you don't feel thirsty. Wear lightweight, light-colored, loose-fitting clothing.";
+  } else if (occLower.includes('farm') || occLower.includes('agri')) {
+    advice = "<strong>High Risk (Agricultural):</strong> Schedule strenuous tasks for early morning or late evening. Wear a wide-brimmed hat and protective clothing. Stay hydrated and use the buddy system while out in the fields.";
+  } else if (occLower.includes('office') || occLower.includes('software') || occLower.includes('desk') || occLower.includes('it')) {
+    advice = "<strong>Low Risk (Indoor):</strong> Although your risk of direct heat exposure is low, ensure adequate indoor ventilation and hydration. Be cautious during your commute and avoid peak heat hours when stepping outside.";
+  } else if (occLower.includes('deliver') || occLower.includes('driver') || occLower.includes('courier')) {
+    advice = "<strong>Moderate Risk (Transportation):</strong> Keep vehicle air conditioning running. Carry extra water on your routes and take cooling breaks when necessary. Wear sunglasses and sunscreen.";
+  } else {
+    advice = "<strong>General Advice:</strong> Based on your occupation, ensure you monitor the heat indices carefully. Stay hydrated, avoid prolonged sun exposure during peak hours, and seek shade whenever possible.";
+  }
+  
+  adviceContent.innerHTML = advice;
+}
 
 // Map Initialization
 function initMap() {
