@@ -451,22 +451,52 @@ quickLinks.forEach(btn => {
 function generateOccupationAdvice(occ) {
   const occLower = occ.toLowerCase();
   const adviceContent = document.getElementById('occupation-advice-content');
-  if (!adviceContent) return;
-
+  
   let advice = "";
+  let precautions = "";
+  let safety = "";
+  let symptoms = "";
+
   if (occLower.includes('construct') || occLower.includes('build') || occLower.includes('labor') || occLower.includes('mason')) {
     advice = "<strong>High Risk (Outdoor Labor):</strong> Take frequent breaks in shaded or cooled areas. Hydrate constantly (at least 1 cup every 20 minutes) even if you don't feel thirsty. Wear lightweight, light-colored, loose-fitting clothing.";
+    precautions = "<li>Drink water every 15-20 minutes, even if you are not thirsty.</li><li>Wear breathable, light-colored, long-sleeved clothing to block the sun.</li><li>Schedule the heaviest physical labor for early morning or late evening.</li><li>Take breaks in air-conditioned or fully shaded areas.</li>";
+    safety = "<li>Use the buddy system to monitor coworkers for signs of heat illness.</li><li>Have a strict work-rest schedule based on the WBGT (Wet Bulb Globe Temperature).</li><li>Provide shaded cooling stations with cold water or electrolyte drinks.</li><li>Familiarize all site workers with emergency heat stroke protocols.</li>";
+    symptoms = "<li><b>Heat Exhaustion:</b> Dizziness, extreme sweating, muscle cramps, weakness.</li><li><b>Heat Stroke (EMERGENCY):</b> Hot, red, dry skin (no sweating), confusion, fainting. Call emergency services immediately.</li>";
   } else if (occLower.includes('farm') || occLower.includes('agri')) {
     advice = "<strong>High Risk (Agricultural):</strong> Schedule strenuous tasks for early morning or late evening. Wear a wide-brimmed hat and protective clothing. Stay hydrated and use the buddy system while out in the fields.";
+    precautions = "<li>Always carry an insulated water jug into the fields.</li><li>Wear a wide-brimmed hat with a neck flap and UV-protective sunglasses.</li><li>Avoid working alone in remote fields during peak heat (11 AM to 4 PM).</li>";
+    safety = "<li>Ensure tractors and farm equipment have functioning AC or shaded canopies.</li><li>Keep emergency communication devices charged in case of heat collapse.</li><li>Take breaks under trees or constructed shade tents.</li>";
+    symptoms = "<li><b>Heat Cramps:</b> Painful muscle spasms during heavy farm work.</li><li><b>Heat Exhaustion:</b> Nausea, pale clammy skin, fast heartbeat.</li>";
   } else if (occLower.includes('office') || occLower.includes('software') || occLower.includes('desk') || occLower.includes('it')) {
     advice = "<strong>Low Risk (Indoor):</strong> Although your risk of direct heat exposure is low, ensure adequate indoor ventilation and hydration. Be cautious during your commute and avoid peak heat hours when stepping outside.";
+    precautions = "<li>Keep a water bottle at your desk and sip regularly.</li><li>Ensure the office AC is well maintained and not blowing directly on you.</li><li>Avoid heavy, hot lunches that can make you sluggish in a warm office.</li>";
+    safety = "<li>If the office AC fails, use desk fans and open windows if cooler outside.</li><li>Avoid strenuous outdoor activities during your lunch break.</li><li>Be cautious during your commute home if using public transport without AC.</li>";
+    symptoms = "<li><b>Dehydration:</b> Headaches, dry mouth, fatigue at your desk.</li><li><b>Heat Syncope:</b> Fainting if standing up too quickly in a hot environment.</li>";
   } else if (occLower.includes('deliver') || occLower.includes('driver') || occLower.includes('courier')) {
     advice = "<strong>Moderate Risk (Transportation):</strong> Keep vehicle air conditioning running. Carry extra water on your routes and take cooling breaks when necessary. Wear sunglasses and sunscreen.";
+    precautions = "<li>Keep your vehicle's air conditioning serviced.</li><li>Bring a large cooler with ice packs and water on your route.</li><li>Apply sunscreen on your driving arm (the 'trucker tan' arm).</li><li>Wear sunglasses to prevent UV damage and eye strain.</li>";
+    safety = "<li>Never lock yourself in an unventilated vehicle without AC running.</li><li>Park in the shade whenever waiting for long periods.</li><li>If you feel dizzy while driving, pull over immediately to a safe location.</li>";
+    symptoms = "<li><b>Heat Exhaustion:</b> Profuse sweating, fatigue, blurry vision while driving.</li><li><b>Sunburn:</b> Red, painful skin on arms exposed to the window.</li>";
   } else {
     advice = "<strong>General Advice:</strong> Based on your occupation, ensure you monitor the heat indices carefully. Stay hydrated, avoid prolonged sun exposure during peak hours, and seek shade whenever possible.";
+    // Use fallback original text for general case
+    precautions = "<li>Drink plenty of water even if you do not feel thirsty.</li><li>Wear loose, lightweight, light-colored clothing.</li><li>Limit outdoor activity, especially midday when the sun is hottest.</li><li>Check on family, friends, and neighbors who do not have air conditioning.</li>";
+    safety = "<li>Never leave children or pets in a closed, parked vehicle.</li><li>If you must work outdoors, use a buddy system and take frequent breaks.</li><li>Seek medical care immediately if you have symptoms of heat illness.</li><li>Know where your nearest municipal cooling center is located.</li>";
+    symptoms = "<li><b>Heat Exhaustion:</b> Heavy sweating, weakness, cold/pale/clammy skin, fast/weak pulse, nausea, fainting.</li><li><b>Heat Stroke (EMERGENCY):</b> High body temperature (103°F+), hot/red/dry skin, rapid/strong pulse, confusion, loss of consciousness.</li>";
   }
   
-  adviceContent.innerHTML = advice;
+  if (adviceContent) adviceContent.innerHTML = advice;
+  
+  // Override the Health Advices tab content dynamically for all languages to match the occupation
+  const langs = ['en', 'hi', 'te'];
+  langs.forEach(l => {
+    translations[l].precautions_content = precautions;
+    translations[l].safety_content = safety;
+    translations[l].symptoms_content = symptoms;
+  });
+  
+  // Force DOM update in the Health Advices view
+  updateLanguage();
 }
 
 // Map Initialization
