@@ -1,5 +1,5 @@
 // Configuration
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/risk-forecast';
+const API_URL = import.meta.env.VITE_API_URL || 'https://svasthya-vil3.onrender.com/api/risk-forecast';
 
 // Risk Color Mapping
 const riskColors = {
