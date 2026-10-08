@@ -103,6 +103,25 @@ class AlertEngine:
             logger.info(f"[MOCK SMS to {to_number}] {message}")
             return "MOCK_DELIVERED"
 
+    def dispatch_whatsapp(self, to_number: str, message: str):
+        if self.twilio_client:
+            try:
+                from_num = self.from_number.replace("whatsapp:", "").strip()
+                to_num = to_number.replace("whatsapp:", "").strip()
+                msg = self.twilio_client.messages.create(
+                    body=message,
+                    from_=f"whatsapp:{from_num}",
+                    to=f"whatsapp:{to_num}"
+                )
+                logger.info(f"Twilio WhatsApp sent. SID: {msg.sid}")
+                return "DELIVERED"
+            except Exception as e:
+                logger.error(f"Failed to send Twilio WhatsApp message: {e}")
+                return f"FAILED: {str(e)}"
+        else:
+            logger.info(f"[MOCK WhatsApp to {to_number}] {message}")
+            return "MOCK_DELIVERED"
+
     def evaluate_and_alert(self, ward_name: str, risk: float):
         rules = self._get_rules_for_ward(ward_name, risk)
         triggered_count = 0
@@ -114,7 +133,11 @@ class AlertEngine:
             message = (f"ALERT: {ward_name} has crossed risk threshold {rule['risk_threshold']}. "
                        f"Current risk: {risk:.2f}. Recommended action: {action_type}.")
             
-            status = self.dispatch_sms(phone_number, message)
+            if "whatsapp" in action_type.lower():
+                status = self.dispatch_whatsapp(phone_number, message)
+            else:
+                status = self.dispatch_sms(phone_number, message)
+                
             self._log_alert(ward_name, action_type, message, phone_number, status)
             triggered_count += 1
             
