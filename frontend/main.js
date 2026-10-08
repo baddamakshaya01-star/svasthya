@@ -645,9 +645,20 @@ function generateAdvisory(tier) {
 async function fetchForecast() {
   try {
     const res = await fetch(API_URL);
-    if (!res.ok) throw new Error('Network response was not ok');
+    if (!res.ok) throw new Error(`Network response was not ok: ${res.status}`);
     allWardsData = await res.json();
+  } catch (error) {
+    console.warn('Primary API fetch failed, trying live Render endpoint:', error);
+    try {
+      const fallbackRes = await fetch('https://svasthya-vil3.onrender.com/api/risk-forecast');
+      if (!fallbackRes.ok) throw new Error('Render fallback failed');
+      allWardsData = await fallbackRes.json();
+    } catch (fallbackErr) {
+      console.error('All fetch attempts failed:', fallbackErr);
+    }
+  }
 
+  if (allWardsData && allWardsData.length > 0) {
     // Update Ward Dropdown
     wardPageSelect.innerHTML = '<option value="all">City Average</option>';
     allWardsData.forEach((ward, index) => {
@@ -664,8 +675,7 @@ async function fetchForecast() {
     renderMapData();
     updateWidgets();
     renderChart();
-  } catch (error) {
-    console.error('Error fetching data:', error);
+    if (typeof updateAlerts === 'function') updateAlerts();
   }
 }
 
