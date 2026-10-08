@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="/style.css">
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
@@ -103,8 +104,7 @@
           
           <nav class="sidebar-nav">
             <a href="#" class="nav-item active" data-view="view-home"><i class="fa-solid fa-house"></i> <span data-i18n="nav_home">Home</span></a>
-            <a href="#" class="nav-item" data-view="view-weather"><i class="fa-solid fa-cloud-sun"></i> <span data-i18n="nav_weather">Weather</span></a>
-            <a href="#" class="nav-item" data-view="view-stress"><i class="fa-solid fa-heart-pulse"></i> <span data-i18n="nav_stress">Stress Analytics</span></a>
+            <a href="#" class="nav-item" data-view="view-radiation"><i class="fa-solid fa-sun-plant-wilt"></i> <span data-i18n="nav_radiation">Radiation Factor</span></a>
             <a href="#" class="nav-item" data-view="view-ward"><i class="fa-solid fa-map-location-dot"></i> <span data-i18n="nav_ward">Ward Analysis</span></a>
             <a href="#" class="nav-item" data-view="view-history"><i class="fa-solid fa-clock-rotate-left"></i> <span data-i18n="nav_history">AI Chatbot History</span></a>
             <a href="#" class="nav-item" data-view="view-advices"><i class="fa-solid fa-notes-medical"></i> <span data-i18n="nav_advices">Health Advices</span></a>
@@ -121,13 +121,17 @@
           <header class="topbar">
             <div class="search-bar" style="position: relative;">
               <i class="fa-solid fa-magnifying-glass"></i>
-              <input type="text" id="search-input" data-i18n-placeholder="search" placeholder="Search wards..." autocomplete="off">
+              <input type="text" id="search-input" data-i18n-placeholder="search" placeholder="Search wards or any city..." autocomplete="off">
               <div id="search-results" style="position: absolute; top: 100%; left: 0; width: 100%; background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 1000; display: none; max-height: 200px; overflow-y: auto;"></div>
             </div>
             
             <div class="quick-links">
               <span id="last-updated" style="font-size: 12px; color: var(--text-light); margin-right: 15px; font-weight: 600;">Last Updated: Just now</span>
-              <button class="quick-link-btn" data-modal="precautions"><i class="fa-solid fa-shield-heart"></i> <span data-i18n="precautions">Precautions</span></button>
+              <select id="location-select" style="padding: 5px 10px; border-radius: 5px; border: 1px solid #cbd5e1; outline: none; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-dark); background: white;">
+                <option value="hyderabad">Hyderabad</option>
+                <option value="delhi">Delhi</option>
+                <option value="ahmedabad">Ahmedabad</option>
+              </select>
               <button class="quick-link-btn" data-modal="safety"><i class="fa-solid fa-hard-hat"></i> <span data-i18n="safety">Safety</span></button>
               <button class="quick-link-btn" data-modal="symptoms"><i class="fa-solid fa-thermometer"></i> <span data-i18n="symptoms">Symptoms</span></button>
               <button class="quick-link-btn" data-modal="alerts"><i class="fa-solid fa-bell"></i> <span data-i18n="alerts">Alerts</span></button>
@@ -139,14 +143,20 @@
                 <option value="hi">हिंदी (Hindi)</option>
                 <option value="te">తెలుగు (Telugu)</option>
               </select>
-              <button class="icon-btn"><i class="fa-regular fa-bell"></i></button>
+              <button class="icon-btn" data-modal="alerts" style="position: relative;"><i class="fa-regular fa-bell"></i></button>
               <div class="profile-dropdown-container">
                 <button class="icon-btn profile-btn" id="profile-toggle"><i class="fa-regular fa-circle-user"></i></button>
-                <div class="profile-dropdown" id="profile-dropdown" style="display: none;">
-                  <div class="dropdown-header">
-                    <strong data-i18n="current_user">Current User</strong>
+                <div class="profile-dropdown" id="profile-dropdown" style="display: none; min-width: 200px; padding: 15px;">
+                  <div class="dropdown-header" style="border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 10px;">
+                    <strong data-i18n="current_user" style="display: block; font-size: 14px; color: var(--primary-blue);">Current User</strong>
+                    <div id="profile-details" style="font-size: 13px; color: var(--text-dark); margin-top: 8px; text-align: left; line-height: 1.5;">
+                      <div><b>Name:</b> <span id="display-username">--</span></div>
+                      <div><b>Age:</b> <span id="display-age">--</span></div>
+                      <div><b>Occupation:</b> <span id="display-occupation">--</span></div>
+                      <div><b>Health Issues:</b> <span id="display-diseases">--</span></div>
+                    </div>
                   </div>
-                  <button id="logout-btn"><i class="fa-solid fa-arrow-right-from-bracket"></i> <span data-i18n="logout">Logout</span></button>
+                  <button id="logout-btn" style="width: 100%; text-align: left;"><i class="fa-solid fa-arrow-right-from-bracket"></i> <span data-i18n="logout">Logout</span></button>
                 </div>
               </div>
             </div>
@@ -162,16 +172,90 @@
               </div>
               <div class="dashboard-grid">
             
-            <!-- Heat Stress Index Widget (Replaces Weather) -->
-            <div class="widget glass-panel stress-mini-widget" style="text-align: center; display: flex; flex-direction: column; justify-content: center;">
-              <div class="stat-header" style="justify-content: center; margin-bottom: 15px;">
-                <span data-i18n="stress_index_title">Heat Stress Index</span>
+            <!-- Heat Stress Index Widget (New Image-Based UI) -->
+            <div class="widget stress-mini-widget" style="padding: 0; background: linear-gradient(135deg, #f97316 0%, #dc2626 100%); color: white; display: flex; flex-direction: column; overflow: hidden; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+              
+              <!-- Top Half: Gauge -->
+              <div style="padding: 25px 25px 15px 25px; text-align: center; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                <h3 style="font-weight: 600; font-size: 18px; margin-bottom: 15px;">Thermal Stress Index</h3>
+                
+                <div style="position: relative; width: 180px; height: 95px; margin: 0 auto;">
+                  <svg width="180" height="100" viewBox="0 0 180 100" style="position: absolute; top: 0; left: 0;">
+                    <!-- Background arc -->
+                    <path d="M 10 90 A 80 80 0 0 1 170 90" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="14" stroke-linecap="butt" />
+                    <!-- Foreground arc -->
+                    <path id="ts-gauge-path" d="M 10 90 A 80 80 0 0 1 170 90" fill="none" stroke="#fbbf24" stroke-width="14" stroke-linecap="butt" stroke-dasharray="251.2" stroke-dashoffset="251.2" style="transition: stroke-dashoffset 0.8s ease;" />
+                  </svg>
+                  
+                  <div style="position: absolute; bottom: 0; left: 0; width: 100%; text-align: center;">
+                    <div id="ts-val-num" style="font-size: 42px; font-weight: 700; line-height: 1; margin-bottom: -5px;">--</div>
+                    <div style="font-size: 13px; opacity: 0.9;">/100</div>
+                  </div>
+                </div>
+                
+                <h2 id="ts-val-text" style="font-size: 18px; font-weight: 700; margin: 15px 0 10px 0; letter-spacing: 1px;">--</h2>
+                
+                <div style="font-size: 12px; opacity: 0.9; line-height: 1.4;">
+                  Peak risk expected<br>
+                  <strong style="font-size: 13px;">2:00 PM – 5:00 PM</strong>
+                </div>
               </div>
-              <div class="gauge-container" style="position: relative; width: 120px; height: 60px; margin: 0 auto; overflow: hidden;">
-                <div style="width: 120px; height: 120px; border-radius: 50%; border: 15px solid #e2e8f0; border-bottom-color: transparent; border-right-color: transparent; transform: rotate(45deg); box-sizing: border-box; position: absolute; top: 0; left: 0;"></div>
-                <div id="home-stress-gauge-fill" style="width: 120px; height: 120px; border-radius: 50%; border: 15px solid #10b981; border-bottom-color: transparent; border-right-color: transparent; transform: rotate(45deg); box-sizing: border-box; position: absolute; top: 0; left: 0; transition: all 0.5s ease;"></div>
+
+              <!-- Bottom Half: Current Conditions Card -->
+              <div style="background: white; border-radius: 20px 20px 0 0; padding: 20px; color: var(--text-dark); margin-top: auto;">
+                <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 15px; color: var(--text-dark);">Current Conditions</h4>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                  <!-- Temp -->
+                  <div style="background: white; border: 1px solid #f1f5f9; border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.02);">
+                    <div style="color: #ef4444; font-size: 20px; width: 24px; text-align: center;"><i class="fa-solid fa-temperature-half"></i></div>
+                    <div>
+                      <div id="ts-temp" style="font-weight: 700; font-size: 15px;">--</div>
+                      <div style="font-size: 11px; color: var(--text-light);">Temperature</div>
+                    </div>
+                  </div>
+                  <!-- Humidity -->
+                  <div style="background: white; border: 1px solid #f1f5f9; border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.02);">
+                    <div style="color: #3b82f6; font-size: 20px; width: 24px; text-align: center;"><i class="fa-solid fa-droplet"></i></div>
+                    <div>
+                      <div id="ts-hum" style="font-weight: 700; font-size: 15px;">--</div>
+                      <div style="font-size: 11px; color: var(--text-light);">Humidity</div>
+                    </div>
+                  </div>
+                  <!-- Wind -->
+                  <div style="background: white; border: 1px solid #f1f5f9; border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.02);">
+                    <div style="color: #0ea5e9; font-size: 20px; width: 24px; text-align: center;"><i class="fa-solid fa-wind"></i></div>
+                    <div>
+                      <div id="ts-wind" style="font-weight: 700; font-size: 15px;">--</div>
+                      <div style="font-size: 11px; color: var(--text-light);">Wind Speed</div>
+                    </div>
+                  </div>
+                  <!-- Solar -->
+                  <div style="background: white; border: 1px solid #f1f5f9; border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.02);">
+                    <div style="color: #f59e0b; font-size: 20px; width: 24px; text-align: center;"><i class="fa-solid fa-sun"></i></div>
+                    <div>
+                      <div id="ts-solar" style="font-weight: 700; font-size: 15px;">--</div>
+                      <div style="font-size: 11px; color: var(--text-light);">Solar Radiation</div>
+                    </div>
+                  </div>
+                  <!-- WBGT -->
+                  <div style="background: white; border: 1px solid #f1f5f9; border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.02);">
+                    <div style="color: #10b981; font-size: 20px; width: 24px; text-align: center;"><i class="fa-solid fa-circle-notch"></i></div>
+                    <div>
+                      <div id="ts-wbgt" style="font-weight: 700; font-size: 15px;">--</div>
+                      <div style="font-size: 11px; color: var(--text-light);">WBGT</div>
+                    </div>
+                  </div>
+                  <!-- UV Index -->
+                  <div style="background: white; border: 1px solid #f1f5f9; border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.02);">
+                    <div style="color: #f97316; font-size: 20px; width: 24px; text-align: center;"><i class="fa-regular fa-sun"></i></div>
+                    <div>
+                      <div id="ts-uv" style="font-weight: 700; font-size: 15px;">--</div>
+                      <div style="font-size: 11px; color: var(--text-light);">UV Index</div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <h2 id="home-stress-val" style="margin-top: 10px;">Low</h2>
             </div>
 
             <!-- 7-Day Forecast Map Widget (Moved back to Home) -->
@@ -278,16 +362,6 @@
               </div>
             </div>
 
-            <!-- Occupation Advice Widget -->
-            <div class="widget glass-panel" style="grid-column: 1 / -1; display: flex; flex-direction: column; padding: 25px; margin-top: 10px;">
-              <div class="stat-header" style="margin-bottom: 15px; display: flex; justify-content: space-between;">
-                <h3 style="margin:0; font-size: 16px; color: var(--primary-blue);" id="occupation-advice-title">Personalized Health Advice</h3>
-                <i class="fa-solid fa-user-doctor" style="color: var(--primary-blue);"></i>
-              </div>
-              <div style="font-size: 14px; line-height: 1.6; color: var(--text-dark);" id="occupation-advice-content">
-                Please enter your occupation during login to receive personalized health advices.
-              </div>
-            </div>
 
           </div> <!-- End Dashboard Grid -->
           </div> <!-- End Home View -->
@@ -328,20 +402,51 @@
             </div>
           </div>
 
-          <!-- Stress Analytics View (NEW) -->
-          <div id="view-stress" class="dashboard-view-content" style="display: none; padding: 20px;">
-            <div class="glass-panel" style="padding: 40px; border-radius: 16px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 400px;">
-              <h2><i class="fa-solid fa-heart-pulse"></i> <span data-i18n="stress_index_title">Heat Stress Index</span></h2>
-              <p style="margin-bottom: 40px; color: #64748b;" data-i18n="stress_index_desc">Unified biological stress metric based on Composite Risk Score.</p>
+          <!-- Radiation Factor View (Replaces Stress Analytics) -->
+          <div id="view-radiation" class="dashboard-view-content" style="display: none; padding: 20px;">
+            <div class="glass-panel" style="padding: 20px; border-radius: 16px; margin-bottom: 20px;">
+              <h2 style="color: var(--primary-blue); font-size: 22px; margin-bottom: 10px;"><i class="fa-solid fa-sun-plant-wilt"></i> <span data-i18n="nav_radiation">Radiation Factor Forecast</span></h2>
+              <p style="color: var(--text-light); margin-bottom: 20px;">Forecast based on mortality risk and human stress index for the selected location.</p>
               
-              <div class="gauge-container" style="position: relative; width: 240px; height: 120px; margin: 0 auto; overflow: hidden;">
-                <!-- CSS semi-circle gauge (Double Size) -->
-                <div style="width: 240px; height: 240px; border-radius: 50%; border: 30px solid #e2e8f0; border-bottom-color: transparent; border-right-color: transparent; transform: rotate(45deg); box-sizing: border-box; position: absolute; top: 0; left: 0;"></div>
-                <!-- The dynamic fill -->
-                <div id="stress-gauge-fill" style="width: 240px; height: 240px; border-radius: 50%; border: 30px solid #10b981; border-bottom-color: transparent; border-right-color: transparent; transform: rotate(45deg); box-sizing: border-box; position: absolute; top: 0; left: 0; transition: all 0.5s ease;"></div>
+              <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                  <thead>
+                    <tr style="border-bottom: 2px solid #e2e8f0; color: var(--text-dark);">
+                      <th style="padding: 12px;">Day</th>
+                      <th style="padding: 12px;">Temp (°C)</th>
+                      <th style="padding: 12px;">Human Stress Index</th>
+                      <th style="padding: 12px;">Baseline Mortality Risk</th>
+                      <th style="padding: 12px;">Risk Tier</th>
+                    </tr>
+                  </thead>
+                  <tbody id="radiation-forecast-table">
+                    <!-- Populated by JS -->
+                  </tbody>
+                </table>
               </div>
-              <h1 id="stress-val" style="font-size: 48px; font-weight: 700; margin-top: 20px;">Low</h1>
-              <p id="stress-desc" style="font-size: 18px; color: var(--text-dark); margin-top: 10px; max-width: 400px;">Safe limits. Normal activities.</p>
+            </div>
+
+            <!-- Simulator -->
+            <div class="glass-panel" style="padding: 25px; border-radius: 16px; background: linear-gradient(135deg, #ffffff 0%, #fef3c7 100%); border: 1px solid #fde68a;">
+              <h3 style="color: #b45309; font-size: 18px; margin-bottom: 15px;"><i class="fa-solid fa-calculator"></i> Radiation Impact Simulator</h3>
+              <p style="color: var(--text-dark); margin-bottom: 20px; font-size: 14px;">Adjust the solar radiation (W/m²) to simulate its impact on the estimated death rate (mortality multiplier).</p>
+              
+              <div style="display: flex; gap: 30px; align-items: center; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 250px;">
+                  <label for="rad-slider" style="font-weight: 600; display: block; margin-bottom: 10px;">Solar Radiation: <span id="rad-slider-val" style="color: #d97706; font-size: 18px;">800</span> W/m²</label>
+                  <input type="range" id="rad-slider" min="200" max="1200" step="10" value="800" style="width: 100%; cursor: pointer;">
+                  <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-light); margin-top: 5px;">
+                    <span>Cloudy (200)</span>
+                    <span>Extreme Sun (1200)</span>
+                  </div>
+                </div>
+                
+                <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); text-align: center; min-width: 200px; border: 2px solid #fcd34d;">
+                  <div style="font-size: 13px; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 1px;">Estimated Death Rate</div>
+                  <div id="sim-death-rate" style="font-size: 42px; font-weight: 700; color: #dc2626; margin: 10px 0;">--%</div>
+                  <div id="sim-risk-label" style="font-size: 14px; font-weight: 600; color: #ef4444;">HIGH RISK</div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -389,6 +494,28 @@
                   <li><b>Heat Exhaustion:</b> Heavy sweating, weakness, cold/pale/clammy skin, fast/weak pulse, nausea, fainting.</li>
                   <li><b>Heat Stroke (EMERGENCY):</b> High body temperature (103°F+), hot/red/dry skin, rapid/strong pulse, confusion, loss of consciousness.</li>
                 </ul>
+              </div>
+
+              <!-- Personalized Advice Widget -->
+              <div class="glass-panel" style="grid-column: 1 / -1; display: flex; flex-direction: column; padding: 25px; border-radius: 16px;">
+                <div class="stat-header" style="margin-bottom: 15px; display: flex; justify-content: space-between;">
+                  <h3 style="margin:0; font-size: 18px; color: var(--primary-blue);" id="occupation-advice-title">Personalized Health Advice</h3>
+                  <i class="fa-solid fa-user-doctor" style="color: var(--primary-blue); font-size: 18px;"></i>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 15px;">
+                  <div>
+                    <h4 style="font-size: 15px; margin-bottom: 5px; color: var(--text-dark);">Occupation-Based Recommendations</h4>
+                    <div style="font-size: 14px; line-height: 1.6; color: var(--text-dark);" id="occupation-advice-content">
+                      Please enter your occupation during login to receive personalized health advices.
+                    </div>
+                  </div>
+                  <div>
+                    <h4 style="font-size: 15px; margin-bottom: 5px; color: var(--text-dark);">Health Condition-Based Recommendations</h4>
+                    <div style="font-size: 14px; line-height: 1.6; color: var(--text-dark);" id="health-advice-content">
+                      Please enter your health conditions during login to receive personalized health advices.
+                    </div>
+                  </div>
+                </div>
               </div>
 
             </div>

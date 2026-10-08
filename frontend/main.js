@@ -12,6 +12,7 @@ const riskColors = {
 
 let map;
 let wardMarkers = [];
+let heatLayer = null;
 let allWardsData = [];
 let currentDay = 0;
 let dashboardInitialized = false;
@@ -210,6 +211,17 @@ const homeHiProgress = document.getElementById('home-hi-progress');
 const homeUtciVal = document.getElementById('home-utci-val');
 const homeUtciProgress = document.getElementById('home-utci-progress');
 
+// New Thermal App UI
+const tsValNum = document.getElementById('ts-val-num');
+const tsValText = document.getElementById('ts-val-text');
+const tsGaugePath = document.getElementById('ts-gauge-path');
+const tsTemp = document.getElementById('ts-temp');
+const tsHum = document.getElementById('ts-hum');
+const tsWind = document.getElementById('ts-wind');
+const tsSolar = document.getElementById('ts-solar');
+const tsWbgt = document.getElementById('ts-wbgt');
+const tsUv = document.getElementById('ts-uv');
+
 // Ward Page
 const wardPageSelect = document.getElementById('ward-page-select');
 const timeSlider = document.getElementById('forecast-page-slider');
@@ -218,7 +230,7 @@ const dayLabel = document.getElementById('forecast-page-day-label');
 // Localization Logic
 function updateLanguage() {
   const dict = translations[currentLanguage];
-  
+
   // Text Content
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
@@ -226,7 +238,7 @@ function updateLanguage() {
       el.textContent = dict[key];
     }
   });
-  
+
   // HTML Content
   document.querySelectorAll('[data-i18n-html]').forEach(el => {
     const key = el.getAttribute('data-i18n-html');
@@ -234,7 +246,7 @@ function updateLanguage() {
       el.innerHTML = dict[key];
     }
   });
-  
+
   // Placeholders
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
     const key = el.getAttribute('data-i18n-placeholder');
@@ -252,7 +264,7 @@ function handleLangChange(e) {
   if (currentDay === 0) {
     dayLabel.textContent = translations[currentLanguage].forecast_day_0;
   }
-  
+
   // Sync selects
   if (langSelect) langSelect.value = currentLanguage;
   if (dashLangSelect) dashLangSelect.value = currentLanguage;
@@ -267,9 +279,19 @@ loginForm.addEventListener('submit', (e) => {
   loginView.style.display = 'none';
   dashboardView.style.display = 'flex';
   
+  const username = document.getElementById('username').value.trim();
+  const age = document.getElementById('age').value.trim();
   const occupation = document.getElementById('occupation').value.trim();
-  generateOccupationAdvice(occupation);
+  const diseases = document.getElementById('diseases').value.trim();
   
+  // Populate profile dropdown
+  document.getElementById('display-username').textContent = username || '--';
+  document.getElementById('display-age').textContent = age || '--';
+  document.getElementById('display-occupation').textContent = occupation || '--';
+  document.getElementById('display-diseases').textContent = diseases || 'None';
+  
+  generatePersonalizedAdvice(occupation, diseases);
+
   if (!dashboardInitialized) {
     initDashboard();
     dashboardInitialized = true;
@@ -281,7 +303,7 @@ function initDashboard() {
   initMap();
   fetchForecast();
   loadChatHistory();
-  
+
   timeSlider.addEventListener('input', (e) => {
     currentDay = parseInt(e.target.value);
     if (currentDay === 0) {
@@ -292,11 +314,11 @@ function initDashboard() {
     renderMapData();
     updateWidgets();
   });
-  
+
   wardPageSelect.addEventListener('change', () => {
     renderChart();
   });
-  
+
   initSearch();
 }
 
@@ -308,20 +330,100 @@ function initSearch() {
       searchResults.style.display = 'none';
       return;
     }
-    
+
     // Filter wards
     const matches = allWardsData
-      .map((ward, idx) => ({ name: ward.ward_name, index: idx }))
-      .filter(w => w.name.toLowerCase().includes(val));
-      
+      .map((ward, idx) => ({ ward: ward, index: idx }))
+      .filter(w => w.ward.ward_name.toLowerCase().includes(val));
+
     if (matches.length > 0) {
-      searchResults.innerHTML = matches.map(w => 
-        `<div class="search-item" data-index="${w.index}" style="padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #e2e8f0; font-size: 14px;">${w.name}</div>`
-      ).join('');
+      let html = '';
+      matches.forEach(m => {
+        const riskTier = m.ward.forecasts[0] ? m.ward.forecasts[0].risk_tier : 'Low';
+        const color = riskColors[riskTier] ? riskColors[riskTier].color : '#10b981';
+        html += `<div class="search-item" data-index="${m.index}" style="padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-weight: 500; font-size: 14px; color: #1e293b;">${m.ward.ward_name}</span>
+          <span style="font-size: 12px; color: ${color}; font-weight: 600;">${riskTier}</span>
+        </div>`;
+      });
+      searchResults.innerHTML = html;
       searchResults.style.display = 'block';
     } else {
-      searchResults.innerHTML = `<div style="padding: 10px 15px; font-size: 14px; color: #64748b;">No wards found</div>`;
+      searchResults.innerHTML = `<div style="padding: 10px 15px; font-size: 14px; color: #64748b;">Press Enter to search globally...</div>`;
       searchResults.style.display = 'block';
+    }
+  });
+  
+  // Global Search on Enter
+  searchInput.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      const val = e.target.value.trim();
+      if (!val) return;
+      
+      // Try to find if it's already a ward
+      const matchIndex = allWardsData.findIndex(w => w.ward_name.toLowerCase() === val.toLowerCase());
+      if (matchIndex !== -1) {
+         // Predefined ward
+         wardPageSelect.value = matchIndex;
+         wardPageSelect.dispatchEvent(new Event('change'));
+         document.querySelector('[data-view="view-ward"]').click();
+         searchInput.value = '';
+         searchResults.style.display = 'none';
+         return;
+      }
+      
+      // Global search
+      try {
+        searchInput.disabled = true;
+        const originalPlaceholder = searchInput.placeholder;
+        searchInput.placeholder = 'Fetching live weather...';
+        
+        const baseUrl = API_URL.replace('/api/risk-forecast', '');
+        const response = await fetch(`${baseUrl}/api/search-location?q=${encodeURIComponent(val)}`);
+        
+        if (!response.ok) throw new Error('Location not found');
+        
+        const newWard = await response.json();
+        
+        // Add to allWardsData (at index 0 so it becomes the new proxy for the homepage)
+        allWardsData.unshift(newWard);
+        
+        // Update homepage widgets with the new location
+        updateWidgets();
+        
+        // Update Ward dropdown with the new location
+        const opt = document.createElement('option');
+        opt.value = 0; // It's at index 0 now
+        opt.textContent = newWard.ward_name;
+        wardPageSelect.insertBefore(opt, wardPageSelect.options[1]); // Insert after City Average
+        
+        // Adjust existing options indexes
+        for(let i = 2; i < wardPageSelect.options.length; i++) {
+            if(wardPageSelect.options[i].value !== 'all') {
+                wardPageSelect.options[i].value = parseInt(wardPageSelect.options[i].value) + 1;
+            }
+        }
+        
+        // Update Map
+        if (map) {
+            map.flyTo([newWard.lat, newWard.lng], 12, { animate: true, duration: 1.5 });
+            renderMapData(); // Replot all markers including the new one
+        }
+        
+        // Switch to home view to see widgets update
+        document.querySelector('[data-view="view-home"]').click();
+        
+        // Cleanup
+        searchInput.value = '';
+        searchResults.style.display = 'none';
+        
+      } catch (err) {
+        alert("Location not found or weather data unavailable.");
+      } finally {
+        searchInput.disabled = false;
+        searchInput.placeholder = 'Search wards or any city...';
+        searchInput.focus();
+      }
     }
   });
 
@@ -329,14 +431,16 @@ function initSearch() {
   searchResults.addEventListener('click', (e) => {
     const item = e.target.closest('.search-item');
     if (!item) return;
-    
+
     const wardIndex = item.getAttribute('data-index');
     wardPageSelect.value = wardIndex;
-    renderChart();
     
+    // Trigger the change event so the Ward view updates all widgets and charts
+    wardPageSelect.dispatchEvent(new Event('change'));
+
     // Switch to Ward Analysis View
     document.querySelector('[data-view="view-ward"]').click();
-    
+
     // Cleanup search
     searchInput.value = '';
     searchResults.style.display = 'none';
@@ -358,7 +462,7 @@ function initSidebarRouting() {
   navItems.forEach(item => {
     item.addEventListener('click', (e) => {
       e.preventDefault();
-      
+
       const targetViewId = item.getAttribute('data-view');
       if (!targetViewId) return;
 
@@ -374,7 +478,7 @@ function initSidebarRouting() {
       const targetView = document.getElementById(targetViewId);
       targetView.style.display = 'block';
       targetView.classList.add('active-view');
-      
+
       // Fix map rendering bug if home view is selected (since map is now on home)
       if (targetViewId === 'view-home') {
         setTimeout(() => {
@@ -404,11 +508,11 @@ logoutBtn.addEventListener('click', () => {
   document.getElementById('username').value = '';
   document.getElementById('age').value = '';
   document.getElementById('diseases').value = '';
-  
+
   dashboardView.style.display = 'none';
   profileDropdown.style.display = 'none';
   loginView.style.display = 'flex';
-  
+
   // reset to home view automatically for next login
   document.querySelector('[data-view="view-home"]').click();
 });
@@ -440,18 +544,21 @@ const modalContents = {
   'alerts': `<p>No critical system-wide alerts at this time.</p>`
 };
 
-quickLinks.forEach(btn => {
+document.querySelectorAll('[data-modal]').forEach(btn => {
   btn.addEventListener('click', () => {
     const key = btn.getAttribute('data-modal');
-    const title = btn.querySelector('span').textContent; 
+    const span = btn.querySelector('span');
+    const title = span ? span.textContent : (key.charAt(0).toUpperCase() + key.slice(1));
     showModal(title, modalContents[key]);
   });
 });
 
-function generateOccupationAdvice(occ) {
+function generatePersonalizedAdvice(occ, diseases) {
   const occLower = occ.toLowerCase();
+  const disLower = diseases.toLowerCase();
   const adviceContent = document.getElementById('occupation-advice-content');
-  
+  const healthContent = document.getElementById('health-advice-content');
+
   let advice = "";
   let precautions = "";
   let safety = "";
@@ -484,9 +591,25 @@ function generateOccupationAdvice(occ) {
     safety = "<li>Never leave children or pets in a closed, parked vehicle.</li><li>If you must work outdoors, use a buddy system and take frequent breaks.</li><li>Seek medical care immediately if you have symptoms of heat illness.</li><li>Know where your nearest municipal cooling center is located.</li>";
     symptoms = "<li><b>Heat Exhaustion:</b> Heavy sweating, weakness, cold/pale/clammy skin, fast/weak pulse, nausea, fainting.</li><li><b>Heat Stroke (EMERGENCY):</b> High body temperature (103°F+), hot/red/dry skin, rapid/strong pulse, confusion, loss of consciousness.</li>";
   }
-  
+
+  let healthAdvice = "";
+  if (disLower.includes('asthma') || disLower.includes('resp')) {
+    healthAdvice = "<strong>Respiratory Condition (Asthma/COPD):</strong> High temperatures and ozone levels can trigger asthma attacks. Keep your inhaler with you at all times. Stay indoors in an air-conditioned environment during peak heat hours and monitor AQI (Air Quality Index).";
+  } else if (disLower.includes('heart') || disLower.includes('cardio') || disLower.includes('bp') || disLower.includes('blood pressure') || disLower.includes('hypertension')) {
+    healthAdvice = "<strong>Cardiovascular Condition:</strong> Heat places extra stress on your heart. Avoid strenuous activities, especially outdoors. If you are on fluid-restricting medications, consult your doctor about how much water you should drink.";
+  } else if (disLower.includes('diabet')) {
+    healthAdvice = "<strong>Diabetes:</strong> Heat can affect blood sugar levels and how insulin works. Check your blood sugar more frequently. Keep your medication and insulin away from direct sunlight and heat.";
+  } else if (disLower.includes('kidney') || disLower.includes('renal')) {
+    healthAdvice = "<strong>Kidney Condition:</strong> Dehydration is especially dangerous for you. Work with your healthcare provider to find the right balance of fluid intake, as you may be on fluid restrictions while still needing to avoid dehydration from heat.";
+  } else if (diseases.trim() === "") {
+    healthAdvice = "<strong>No specific health conditions reported.</strong> Continue to follow general heat safety guidelines.";
+  } else {
+    healthAdvice = "<strong>General Precaution:</strong> Please consult with your healthcare provider to understand how extreme heat might interact with your specific health conditions or medications.";
+  }
+
   if (adviceContent) adviceContent.innerHTML = advice;
-  
+  if (healthContent) healthContent.innerHTML = healthAdvice;
+
   // Override the Health Advices tab content dynamically for all languages to match the occupation
   const langs = ['en', 'hi', 'te'];
   langs.forEach(l => {
@@ -494,7 +617,7 @@ function generateOccupationAdvice(occ) {
     translations[l].safety_content = safety;
     translations[l].symptoms_content = symptoms;
   });
-  
+
   // Force DOM update in the Health Advices view
   updateLanguage();
 }
@@ -502,9 +625,9 @@ function generateOccupationAdvice(occ) {
 // Map Initialization
 function initMap() {
   map = L.map('forecast-page-map').setView([28.6139, 77.2090], 11);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap &copy; CARTO',
-    maxZoom: 20
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19
   }).addTo(map);
 }
 
@@ -524,7 +647,7 @@ async function fetchForecast() {
     const res = await fetch(API_URL);
     if (!res.ok) throw new Error('Network response was not ok');
     allWardsData = await res.json();
-    
+
     // Update Ward Dropdown
     wardPageSelect.innerHTML = '<option value="all">City Average</option>';
     allWardsData.forEach((ward, index) => {
@@ -552,56 +675,82 @@ function updateWidgets() {
   const forecast = proxyWard.forecasts[currentDay];
   if (!forecast) return;
 
-  const tempF = (forecast.temperature_c * 9/5) + 32;
-  if(weatherPageTemp) weatherPageTemp.textContent = `${Math.round(tempF)}°F`;
-  
+  const tempF = (forecast.temperature_c * 9 / 5) + 32;
+  if (weatherPageTemp) weatherPageTemp.textContent = `${Math.round(tempF)}°F`;
+
   humidityVal.textContent = `${Math.round(forecast.relative_humidity)}%`;
   humidityProgress.style.width = `${Math.round(forecast.relative_humidity)}%`;
-  
+
   // Calculate Stress Index Logic
   let normalizedStress = Math.min(Math.max(forecast.composite_score / 250, 0), 1);
   let rotation = 45 + (normalizedStress * 180);
-  
+
   // Update both Stress Analytics page gauge and Home page mini-gauge
-  if(stressGaugeFill) stressGaugeFill.style.transform = `rotate(${rotation}deg)`;
-  if(homeStressGaugeFill) homeStressGaugeFill.style.transform = `rotate(${rotation}deg)`;
-  
+  if (stressGaugeFill) stressGaugeFill.style.transform = `rotate(${rotation}deg)`;
+  if (homeStressGaugeFill) homeStressGaugeFill.style.transform = `rotate(${rotation}deg)`;
+
   let stressText = "Low";
   let stressColor = '#10b981';
   let stressDescText = "Safe limits. Normal activities.";
-  
+
   if (normalizedStress < 0.3) {
-    if(stressGaugeFill) stressGaugeFill.style.borderColor = '#10b981';
-    if(homeStressGaugeFill) homeStressGaugeFill.style.borderColor = '#10b981';
+    if (stressGaugeFill) stressGaugeFill.style.borderColor = '#10b981';
+    if (homeStressGaugeFill) homeStressGaugeFill.style.borderColor = '#10b981';
   } else if (normalizedStress < 0.6) {
     stressColor = '#f59e0b';
     stressText = "Moderate";
     stressDescText = "Caution. Stay hydrated.";
-    if(stressGaugeFill) stressGaugeFill.style.borderColor = '#f59e0b';
-    if(homeStressGaugeFill) homeStressGaugeFill.style.borderColor = '#f59e0b';
+    if (stressGaugeFill) stressGaugeFill.style.borderColor = '#f59e0b';
+    if (homeStressGaugeFill) homeStressGaugeFill.style.borderColor = '#f59e0b';
   } else if (normalizedStress < 0.8) {
     stressColor = '#ef4444';
     stressText = "High";
     stressDescText = "Danger. Avoid prolonged exposure.";
-    if(stressGaugeFill) stressGaugeFill.style.borderColor = '#ef4444';
-    if(homeStressGaugeFill) homeStressGaugeFill.style.borderColor = '#ef4444';
+    if (stressGaugeFill) stressGaugeFill.style.borderColor = '#ef4444';
+    if (homeStressGaugeFill) homeStressGaugeFill.style.borderColor = '#ef4444';
   } else {
     stressColor = '#7f1d1d';
     stressText = "Extreme";
     stressDescText = "CRITICAL. Extreme Heat Stroke Risk.";
-    if(stressGaugeFill) stressGaugeFill.style.borderColor = '#7f1d1d';
-    if(homeStressGaugeFill) homeStressGaugeFill.style.borderColor = '#7f1d1d';
+    if (stressGaugeFill) stressGaugeFill.style.borderColor = '#7f1d1d';
+    if (homeStressGaugeFill) homeStressGaugeFill.style.borderColor = '#7f1d1d';
   }
-  
-  if(stressVal) {
+
+  if (stressVal) {
     stressVal.textContent = stressText;
     stressVal.style.color = stressColor;
   }
-  if(stressDesc) stressDesc.textContent = stressDescText;
-  
-  if(homeStressVal) {
+  if (stressDesc) stressDesc.textContent = stressDescText;
+
+  if (homeStressVal) {
     homeStressVal.textContent = stressText;
     homeStressVal.style.color = stressColor;
+  }
+
+  // Update New Thermal App UI
+  if (tsValNum) {
+    // Score out of 100
+    const score100 = Math.round(normalizedStress * 100);
+    tsValNum.textContent = score100;
+
+    if (score100 < 40) tsValText.textContent = "LOW RISK";
+    else if (score100 < 70) tsValText.textContent = "MODERATE RISK";
+    else if (score100 < 85) tsValText.textContent = "HIGH RISK";
+    else tsValText.textContent = "EXTREME RISK";
+
+    // SVG path total length is ~251.2
+    // offset = 251.2 - (score/100) * 251.2
+    if (tsGaugePath) {
+      const offset = 251.2 - (normalizedStress * 251.2);
+      tsGaugePath.style.strokeDashoffset = offset;
+    }
+
+    if (tsTemp) tsTemp.textContent = `${forecast.temperature_c.toFixed(1)}°C`;
+    if (tsHum) tsHum.textContent = `${forecast.relative_humidity.toFixed(0)}%`;
+    if (tsWind) tsWind.textContent = `${(10 + Math.random() * 5).toFixed(0)} km/h`; // Mock wind
+    if (tsSolar) tsSolar.textContent = `${(600 + Math.random() * 300).toFixed(0)} W/m²`; // Mock solar
+    if (tsWbgt) tsWbgt.textContent = `${forecast.wbgt_c.toFixed(1)}°C`;
+    if (tsUv) tsUv.textContent = score100 > 70 ? "High" : "Moderate";
   }
 
   // Update 7-Day Forecast List
@@ -609,16 +758,16 @@ function updateWidgets() {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const today = new Date().getDay();
     let listHtml = '';
-    
-    proxyWard.forecasts.slice(0,7).forEach((f, idx) => {
+
+    proxyWard.forecasts.slice(0, 7).forEach((f, idx) => {
       const dayName = idx === 0 ? 'Today' : days[(today + idx) % 7];
-      const maxT = Math.round((f.temperature_c * 9/5) + 32);
+      const maxT = Math.round((f.temperature_c * 9 / 5) + 32);
       const minT = Math.round(maxT - 10 - Math.random() * 5); // Mocking min temp
-      
+
       // Determine icon
       let icon = '<i class="fa-solid fa-sun" style="color:#f59e0b;"></i>';
-      if(f.relative_humidity > 60) icon = '<i class="fa-solid fa-cloud-showers-heavy" style="color:#64748b;"></i>';
-      else if(f.relative_humidity > 45) icon = '<i class="fa-solid fa-cloud-sun" style="color:#4facfe;"></i>';
+      if (f.relative_humidity > 60) icon = '<i class="fa-solid fa-cloud-showers-heavy" style="color:#64748b;"></i>';
+      else if (f.relative_humidity > 45) icon = '<i class="fa-solid fa-cloud-sun" style="color:#4facfe;"></i>';
 
       listHtml += `
         <div style="display: flex; align-items: center; justify-content: space-between; font-size: 14px;">
@@ -638,40 +787,118 @@ function updateWidgets() {
 
   // Update Thermal Indices
   if (homeWbgtVal) {
-    const wbgtF = Math.round((forecast.wbgt_c * 9/5) + 32);
-    const hiF = Math.round((forecast.hi_c * 9/5) + 32);
-    const utciF = Math.round((forecast.utci_c * 9/5) + 32);
+    const wbgtF = Math.round((forecast.wbgt_c * 9 / 5) + 32);
+    const hiF = Math.round((forecast.hi_c * 9 / 5) + 32);
+    const utciF = Math.round((forecast.utci_c * 9 / 5) + 32);
 
     homeWbgtVal.textContent = `${wbgtF}°F`;
-    homeWbgtProgress.style.width = `${Math.min((wbgtF / 120)*100, 100)}%`;
+    homeWbgtProgress.style.width = `${Math.min((wbgtF / 120) * 100, 100)}%`;
 
     homeHiVal.textContent = `${hiF}°F`;
-    homeHiProgress.style.width = `${Math.min((hiF / 120)*100, 100)}%`;
+    homeHiProgress.style.width = `${Math.min((hiF / 120) * 100, 100)}%`;
 
     homeUtciVal.textContent = `${utciF}°F`;
-    homeUtciProgress.style.width = `${Math.min((utciF / 120)*100, 100)}%`;
+    homeUtciProgress.style.width = `${Math.min((utciF / 120) * 100, 100)}%`;
+  }
+
+  // Update Radiation Factor View Table
+  const radTable = document.getElementById('radiation-forecast-table');
+  if (radTable) {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const today = new Date().getDay();
+    let radHtml = '';
+    
+    proxyWard.forecasts.slice(0, 7).forEach((f, idx) => {
+      const dayName = idx === 0 ? 'Today' : days[(today + idx) % 7];
+      const riskColor = f.risk_tier === 'Extreme' ? '#7f1d1d' : 
+                        f.risk_tier === 'Very High' ? '#ef4444' :
+                        f.risk_tier === 'High' ? '#f59e0b' :
+                        f.risk_tier === 'Moderate' ? '#eab308' : '#10b981';
+      
+      radHtml += `
+        <tr style="border-bottom: 1px solid #f1f5f9;">
+          <td style="padding: 12px; font-weight: 500; color: var(--text-dark);">${dayName}</td>
+          <td style="padding: 12px; color: var(--text-dark);">${f.temperature_c.toFixed(1)}</td>
+          <td style="padding: 12px; color: var(--text-dark);">${f.composite_score.toFixed(1)}</td>
+          <td style="padding: 12px; font-weight: 600; color: var(--text-dark);">${(f.predicted_hospitalization_risk * 100).toFixed(1)}%</td>
+          <td style="padding: 12px; color: ${riskColor}; font-weight: 700;">${f.risk_tier}</td>
+        </tr>
+      `;
+    });
+    radTable.innerHTML = radHtml;
+  }
+  
+  updateAlerts();
+}
+
+function updateAlerts() {
+  if (allWardsData.length === 0) return;
+  
+  let highRiskWards = [];
+  allWardsData.forEach(ward => {
+    const f = ward.forecasts[currentDay];
+    if (f.risk_tier === 'Extreme' || f.risk_tier === 'Very High') {
+      highRiskWards.push({ name: ward.ward_name, risk: f.risk_tier, temp: f.temperature_c });
+    }
+  });
+  
+  let alertHtml = '';
+  if (highRiskWards.length === 0) {
+    alertHtml = `<div style="padding: 15px; text-align: center; color: #10b981;"><i class="fa-solid fa-circle-check" style="font-size: 24px; margin-bottom: 10px;"></i><br><b>No critical alerts.</b><br>All wards are currently below the critical heat stress threshold.</div>`;
+  } else {
+    alertHtml = `<div style="margin-bottom: 15px; color: #ef4444; font-weight: 600;"><i class="fa-solid fa-triangle-exclamation"></i> ${highRiskWards.length} Critical Alert(s) Generated!</div>`;
+    alertHtml += `<ul style="padding-left: 0; list-style: none; margin: 0; gap: 10px; display: flex; flex-direction: column;">`;
+    highRiskWards.forEach(w => {
+      const color = w.risk === 'Extreme' ? '#7f1d1d' : '#ef4444';
+      const bg = w.risk === 'Extreme' ? '#fecaca' : '#fee2e2';
+      alertHtml += `<li style="background: ${bg}; padding: 12px; border-radius: 8px; border-left: 4px solid ${color};">
+        <div style="font-weight: 600; color: ${color}; font-size: 14px;">${w.name} - ${w.risk} Risk</div>
+        <div style="font-size: 13px; color: #475569; margin-top: 5px;">Temperature is expected to hit <b>${w.temp.toFixed(1)}°C</b>. Immediate precautions advised for vulnerable populations!</div>
+      </li>`;
+    });
+    alertHtml += `</ul>`;
+  }
+  
+  modalContents['alerts'] = alertHtml;
+  
+  // Add red dot to topbar bell icon
+  const topbarBellBtn = document.querySelector('.topbar-actions [data-modal="alerts"]');
+  if (topbarBellBtn) {
+    if (highRiskWards.length > 0) {
+      topbarBellBtn.innerHTML = `<i class="fa-regular fa-bell"></i><span style="position: absolute; top: 0px; right: 2px; width: 8px; height: 8px; background: red; border-radius: 50%; box-shadow: 0 0 0 2px white;"></span>`;
+    } else {
+      topbarBellBtn.innerHTML = `<i class="fa-regular fa-bell"></i>`;
+    }
   }
 }
 
 function renderMapData() {
   wardMarkers.forEach(m => map.removeLayer(m));
   wardMarkers = [];
+  if (heatLayer) map.removeLayer(heatLayer);
+
+  const heatData = [];
 
   allWardsData.forEach(ward => {
     const forecast = ward.forecasts[currentDay];
     if (!forecast) return;
 
+    // Adjust intensity based on risk model (0.0 to 1.0)
+    // Multiplier creates a more vibrant hotspot glow
+    heatData.push([ward.lat, ward.lng, forecast.predicted_hospitalization_risk * 1.5]);
+
     const colors = riskColors[forecast.risk_tier] || riskColors['Low'];
-    
+
+    // Invisible circle marker to retain click/hover popups over the heatmap
     const marker = L.circleMarker([ward.lat, ward.lng], {
-      radius: 12 + (forecast.predicted_hospitalization_risk * 15),
-      fillColor: colors.color,
-      color: 'white',
-      weight: 2,
-      opacity: 1,
-      fillOpacity: 0.7
+      radius: 25,
+      fillColor: 'transparent',
+      color: 'transparent',
+      weight: 0,
+      opacity: 0,
+      fillOpacity: 0
     }).addTo(map);
-    
+
     const popupHtml = `
       <div style="font-family:'Inter',sans-serif; color:#2d3748;">
         <h3 style="margin:0 0 10px 0; font-size:16px;">${ward.ward_name}</h3>
@@ -687,25 +914,42 @@ function renderMapData() {
     marker.bindPopup(popupHtml, { maxWidth: 300 });
     wardMarkers.push(marker);
   });
+
+  // Render Leaflet Heatmap Layer
+  if (heatData.length > 0) {
+    heatLayer = L.heatLayer(heatData, {
+      radius: 45,
+      blur: 30,
+      maxZoom: 12,
+      gradient: {
+        0.1: '#a7f3d0', // very light green
+        0.3: '#fef08a', // light yellow
+        0.5: '#facc15', // yellow
+        0.7: '#f97316', // orange
+        0.9: '#ef4444', // red
+        1.0: '#991b1b'  // dark red
+      }
+    }).addTo(map);
+  }
 }
 
 // Graphical Representation (Chart.js)
 function renderChart() {
   if (allWardsData.length === 0) return;
-  
+
   let targetWard;
   if (wardPageSelect.value === 'all') {
     targetWard = allWardsData[0]; // Proxy
   } else {
     targetWard = allWardsData[parseInt(wardPageSelect.value)];
   }
-  
+
   const labels = ['Day 0 (Today)', 'Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6'];
   const riskData = targetWard.forecasts.map(f => (f.predicted_hospitalization_risk * 100).toFixed(1));
   const tempData = targetWard.forecasts.map(f => f.temperature_c.toFixed(1));
 
   const ctx = document.getElementById('wardPageChart').getContext('2d');
-  
+
   if (wardPageChartInstance) wardPageChartInstance.destroy();
 
   wardPageChartInstance = new Chart(ctx, {
@@ -738,8 +982,8 @@ function renderChart() {
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       scales: {
-        y: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'Risk %' }},
-        y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Temp °C' }}
+        y: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'Risk %' } },
+        y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Temp °C' } }
       }
     }
   });
@@ -794,15 +1038,15 @@ chatbotClose.addEventListener('click', () => {
 function handleChatSend() {
   const text = chatInputField.value.trim();
   if (!text) return;
-  
+
   let currentHtml = chatbotMessages.innerHTML;
   currentHtml += `<div class="message user-message">${text}</div>`;
   saveChatHistory(currentHtml);
-  
+
   chatInputField.value = '';
   chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
   pageChatHistory.scrollTop = pageChatHistory.scrollHeight;
-  
+
   setTimeout(() => {
     let html = localStorage.getItem('tapa_svasthya_chat_history');
     html += `<div class="message ai-message">Based on the current 7-day predictive models, you should monitor the Heat Index and UTCI carefully. Is there a specific ward you want me to analyze?</div>`;
@@ -822,5 +1066,48 @@ clearChatBtn.addEventListener('click', () => {
   renderChatUI();
 });
 
+// Radiation Impact Simulator Logic
+const radSlider = document.getElementById('rad-slider');
+const radSliderVal = document.getElementById('rad-slider-val');
+const simDeathRate = document.getElementById('sim-death-rate');
+const simRiskLabel = document.getElementById('sim-risk-label');
+
+if (radSlider) {
+  const updateSimulator = () => {
+    const radValue = parseInt(radSlider.value);
+    radSliderVal.textContent = radValue;
+    
+    // Heuristic: baseline mortality risk increases with radiation
+    const normalizedRad = (radValue - 200) / 1000; // 0 to 1
+    const simulatedDeathRate = 1.5 + (normalizedRad * 28.5); // 1.5% to 30%
+    
+    simDeathRate.textContent = `${simulatedDeathRate.toFixed(1)}%`;
+    
+    if (simulatedDeathRate < 5) {
+      simRiskLabel.textContent = "LOW RISK";
+      simRiskLabel.style.color = "#10b981";
+      simDeathRate.style.color = "#10b981";
+    } else if (simulatedDeathRate < 12) {
+      simRiskLabel.textContent = "MODERATE RISK";
+      simRiskLabel.style.color = "#f59e0b";
+      simDeathRate.style.color = "#f59e0b";
+    } else if (simulatedDeathRate < 22) {
+      simRiskLabel.textContent = "HIGH RISK";
+      simRiskLabel.style.color = "#ef4444";
+      simDeathRate.style.color = "#ef4444";
+    } else {
+      simRiskLabel.textContent = "EXTREME RISK";
+      simRiskLabel.style.color = "#7f1d1d";
+      simDeathRate.style.color = "#7f1d1d";
+    }
+  };
+  
+  radSlider.addEventListener('input', updateSimulator);
+  // Initial call
+  setTimeout(updateSimulator, 500);
+}
+
 // Run translation once on load
 updateLanguage();
+
+

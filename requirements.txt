@@ -9,3 +9,4 @@ xgboost
 joblib
 twilio
 python-dotenv
+pythermalcomfort

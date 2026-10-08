@@ -1,7 +1,10 @@
 from fastapi import APIRouter, HTTPException, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Dict
+import httpx
+import asyncio
+from datetime import datetime, timedelta
 import joblib
 import os
 import pandas as pd
@@ -166,92 +169,158 @@ class WardLocation(BaseModel):
     informal_pct: float
     forecasts: List[DailyForecast]
 
-@router.get("/api/risk-forecast", response_model=List[WardLocation])
-def get_ward_risk_forecast():
-    """
-    Simulates fetching a 5-day ahead forecast for multiple city wards.
-    This is used by the frontend dashboard.
-    """
-    import random
+# Simple in-memory cache to prevent hitting API rate limits
+FORECAST_CACHE = {
+    "data": None,
+    "last_fetched": None
+}
+CACHE_DURATION = timedelta(minutes=10)
+
+async def fetch_openweather_forecast(client: httpx.AsyncClient, lat: float, lon: float, api_key: str):
+    url = f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={api_key}&units=metric"
+    response = await client.get(url)
+    response.raise_for_status()
+    return response.json()
+
+def process_forecast_data(data: dict) -> List[Dict]:
+    # Group 3-hour chunks by day (top 5 days)
+    daily_data = {}
+    for item in data['list']:
+        # dt_txt format: '2023-10-15 12:00:00'
+        day_str = item['dt_txt'].split(' ')[0]
+        if day_str not in daily_data:
+            daily_data[day_str] = {
+                'temps': [],
+                'rhs': [],
+                'winds': [],
+                'clouds': []
+            }
+        daily_data[day_str]['temps'].append(item['main']['temp_max'])
+        daily_data[day_str]['rhs'].append(item['main']['humidity'])
+        daily_data[day_str]['winds'].append(item['wind']['speed'])
+        daily_data[day_str]['clouds'].append(item['clouds']['all'])
     
+    # Sort days
+    sorted_days = sorted(list(daily_data.keys()))[:5]
+    
+    processed = []
+    for day in sorted_days:
+        metrics = daily_data[day]
+        max_temp = max(metrics['temps'])
+        avg_rh = sum(metrics['rhs']) / len(metrics['rhs'])
+        avg_wind = sum(metrics['winds']) / len(metrics['winds'])
+        avg_cloud = sum(metrics['clouds']) / len(metrics['clouds'])
+        
+        # Synthetic solar radiation based on cloud cover (0 to 100)
+        synthetic_solar = max(100.0, 900.0 - (avg_cloud * 7.0))
+        
+        processed.append({
+            'temp': max_temp,
+            'rh': avg_rh,
+            'wind': avg_wind,
+            'solar': synthetic_solar
+        })
+        
+    # Extrapolate days 6 and 7 using the day 5 values
+    if len(processed) == 5:
+        processed.append(processed[-1].copy()) # Day 6
+        processed.append(processed[-1].copy()) # Day 7
+        
+    return processed
+
+@router.get("/api/risk-forecast", response_model=List[WardLocation])
+async def get_ward_risk_forecast():
+    """
+    Fetches a 5-day ahead forecast for multiple city wards using OpenWeather API.
+    """
     if risk_model is None:
         raise HTTPException(status_code=503, detail="Predictive model is not available.")
         
+    # Check cache
+    now = datetime.now()
+    if FORECAST_CACHE["data"] and FORECAST_CACHE["last_fetched"] and (now - FORECAST_CACHE["last_fetched"]) < CACHE_DURATION:
+        return FORECAST_CACHE["data"]
+        
+    api_key = os.getenv("OPENWEATHER_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OpenWeather API key not configured.")
+        
     wards = [
-        {"name": "Downtown", "lat": 28.6139, "lng": 77.2090, "elderly_pct": 10.0, "outdoor": 0.2, "informal": 0.1, "base_temp": 38.0},
-        {"name": "North Hills", "lat": 28.6839, "lng": 77.2190, "elderly_pct": 25.0, "outdoor": 0.1, "informal": 0.05, "base_temp": 35.0},
-        {"name": "Industrial District", "lat": 28.5539, "lng": 77.2790, "elderly_pct": 5.0, "outdoor": 0.9, "informal": 0.4, "base_temp": 40.0},
-        {"name": "Eastside Slums", "lat": 28.6339, "lng": 77.3090, "elderly_pct": 15.0, "outdoor": 0.6, "informal": 0.9, "base_temp": 39.0},
-        {"name": "Westend Suburbs", "lat": 28.6239, "lng": 77.1090, "elderly_pct": 20.0, "outdoor": 0.1, "informal": 0.0, "base_temp": 34.0},
-        {"name": "Central Park Area", "lat": 28.5939, "lng": 77.2290, "elderly_pct": 12.0, "outdoor": 0.5, "informal": 0.1, "base_temp": 33.0},
+        {"name": "Downtown", "lat": 28.6139, "lng": 77.2090, "elderly_pct": 10.0, "outdoor": 0.2, "informal": 0.1},
+        {"name": "North Hills", "lat": 28.6839, "lng": 77.2190, "elderly_pct": 25.0, "outdoor": 0.1, "informal": 0.05},
+        {"name": "Industrial District", "lat": 28.5539, "lng": 77.2790, "elderly_pct": 5.0, "outdoor": 0.9, "informal": 0.4},
+        {"name": "Eastside Slums", "lat": 28.6339, "lng": 77.3090, "elderly_pct": 15.0, "outdoor": 0.6, "informal": 0.9},
+        {"name": "Westend Suburbs", "lat": 28.6239, "lng": 77.1090, "elderly_pct": 20.0, "outdoor": 0.1, "informal": 0.0},
+        {"name": "Central Park Area", "lat": 28.5939, "lng": 77.2290, "elderly_pct": 12.0, "outdoor": 0.5, "informal": 0.1},
     ]
     
     responses = []
     
-    for ward in wards:
-        forecasts = []
-        for day in range(7):
-            temp = ward["base_temp"] + random.uniform(-1.0, 2.0) + (day * 0.5)
-            rh = random.uniform(40.0, 70.0) - (day * 1.5)
-            wind = random.uniform(1.0, 5.0)
-            solar = random.uniform(600.0, 900.0)
+    async with httpx.AsyncClient() as client:
+        # Create fetch tasks for all wards concurrently
+        tasks = [fetch_openweather_forecast(client, ward["lat"], ward["lng"], api_key) for ward in wards]
+        
+        try:
+            results = await asyncio.gather(*tasks)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Failed to fetch weather data from OpenWeather API: {str(e)}")
             
-            wbgt = calculate_wbgt_estimation(temp, rh, wind, solar)
-            hi = calculate_heat_index(temp, rh)
-            utci_val = calculate_utci(temp, rh, wind, solar)
-            composite_score, _ = calculate_composite_score(wbgt, hi, utci_val)
+        for i, ward in enumerate(wards):
+            forecasts = []
+            ward_weather_data = process_forecast_data(results[i])
             
-            features = pd.DataFrame([{
-                'temperature_c': temp,
-                'relative_humidity': rh,
-                'wind_speed_ms': wind,
-                'solar_radiation': solar,
-                'composite_score': composite_score,
-                'elderly_population_pct': ward["elderly_pct"],
-                'outdoor_worker_density': ward["outdoor"],
-                'informal_settlement_density': ward["informal"]
-            }])
-            
-            risk_index = float(risk_model.predict(features)[0])
-            risk_index = max(0.0, min(1.0, risk_index))
-            
-            if risk_index < 0.2:
-                tier = "Low"
-            elif risk_index < 0.4:
-                tier = "Moderate"
-            elif risk_index < 0.6:
-                tier = "High"
-            elif risk_index < 0.8:
-                tier = "Very High"
-            else:
-                tier = "Extreme"
+            for day_idx, metrics in enumerate(ward_weather_data):
+                wbgt = calculate_wbgt_estimation(metrics['temp'], metrics['rh'], metrics['wind'], metrics['solar'])
+                hi = calculate_heat_index(metrics['temp'], metrics['rh'])
+                utci_val = calculate_utci(metrics['temp'], metrics['rh'], metrics['wind'], metrics['solar'])
+                composite_score, _ = calculate_composite_score(wbgt, hi, utci_val)
                 
-            forecasts.append(DailyForecast(
-                day=day,
-                predicted_hospitalization_risk=round(risk_index, 4),
-                risk_tier=tier,
-                temperature_c=round(temp, 1),
-                relative_humidity=round(rh, 1),
-                wbgt_c=round(wbgt, 1),
-                hi_c=round(hi, 1),
-                utci_c=round(utci_val, 1),
-                composite_score=round(composite_score, 1)
+                features = pd.DataFrame([{
+                    'temperature_c': metrics['temp'],
+                    'relative_humidity': metrics['rh'],
+                    'wind_speed_ms': metrics['wind'],
+                    'solar_radiation': metrics['solar'],
+                    'composite_score': composite_score,
+                    'elderly_population_pct': ward["elderly_pct"],
+                    'outdoor_worker_density': ward["outdoor"],
+                    'informal_settlement_density': ward["informal"]
+                }])
+                
+                risk_index = float(risk_model.predict(features)[0])
+                risk_index = max(0.0, min(1.0, risk_index))
+                
+                if risk_index < 0.2: tier = "Low"
+                elif risk_index < 0.4: tier = "Moderate"
+                elif risk_index < 0.6: tier = "High"
+                elif risk_index < 0.8: tier = "Very High"
+                else: tier = "Extreme"
+                
+                forecasts.append(DailyForecast(
+                    day=day_idx,
+                    predicted_hospitalization_risk=round(risk_index, 4),
+                    risk_tier=tier,
+                    temperature_c=round(metrics['temp'], 1),
+                    relative_humidity=round(metrics['rh'], 1),
+                    wbgt_c=round(wbgt, 1),
+                    hi_c=round(hi, 1),
+                    utci_c=round(utci_val, 1),
+                    composite_score=round(composite_score, 1)
+                ))
+                
+            responses.append(WardLocation(
+                ward_name=ward["name"],
+                lat=ward["lat"],
+                lng=ward["lng"],
+                elderly_pct=ward["elderly_pct"],
+                outdoor_pct=ward["outdoor"],
+                informal_pct=ward["informal"],
+                forecasts=forecasts
             ))
             
-            # Evaluate alerts for current day (Day 0)
-            if day == 0:
-                alert_engine.evaluate_and_alert(ward["name"], risk_index)
-            
-        responses.append(WardLocation(
-            ward_name=ward["name"],
-            lat=ward["lat"],
-            lng=ward["lng"],
-            elderly_pct=ward["elderly_pct"],
-            outdoor_pct=ward["outdoor"],
-            informal_pct=ward["informal"],
-            forecasts=forecasts
-        ))
-        
+    # Update cache
+    FORECAST_CACHE["data"] = responses
+    FORECAST_CACHE["last_fetched"] = now
+    
     return responses
 
 class RuleCreateRequest(BaseModel):
@@ -270,9 +339,94 @@ def list_alert_rules():
     return get_all_rules()
 
 @router.delete("/api/alerts/rules/{rule_id}")
-def remove_alert_rule(rule_id: int):
-    delete_rule(rule_id)
-    return {"status": "success"}
+def api_delete_rule(rule_id: str):
+    if delete_rule(rule_id):
+        return {"status": "success"}
+    raise HTTPException(status_code=404, detail="Rule not found")
+
+@router.get("/api/search-location", response_model=WardLocation)
+async def search_global_location(q: str):
+    if not q:
+        raise HTTPException(status_code=400, detail="Query parameter 'q' is required.")
+        
+    api_key = os.getenv("OPENWEATHER_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OpenWeather API key not configured.")
+        
+    async with httpx.AsyncClient() as client:
+        # Geocode the location
+        geo_url = f"http://api.openweathermap.org/geo/1.0/direct?q={q}&limit=1&appid={api_key}"
+        geo_resp = await client.get(geo_url)
+        geo_resp.raise_for_status()
+        geo_data = geo_resp.json()
+        
+        if not geo_data:
+            raise HTTPException(status_code=404, detail="Location not found.")
+            
+        lat = geo_data[0]['lat']
+        lon = geo_data[0]['lon']
+        name = geo_data[0]['name']
+        
+        # Fetch weather data
+        try:
+            weather_data_raw = await fetch_openweather_forecast(client, lat, lon, api_key)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Failed to fetch weather data: {str(e)}")
+            
+        ward_weather_data = process_forecast_data(weather_data_raw)
+        
+        forecasts = []
+        for day_idx, metrics in enumerate(ward_weather_data):
+            wbgt = calculate_wbgt_estimation(metrics['temp'], metrics['rh'], metrics['wind'], metrics['solar'])
+            hi = calculate_heat_index(metrics['temp'], metrics['rh'])
+            utci_val = calculate_utci(metrics['temp'], metrics['rh'], metrics['wind'], metrics['solar'])
+            composite_score, _ = calculate_composite_score(wbgt, hi, utci_val)
+            
+            # Default demographic values for custom search
+            features = pd.DataFrame([{
+                'temperature_c': metrics['temp'],
+                'relative_humidity': metrics['rh'],
+                'wind_speed_ms': metrics['wind'],
+                'solar_radiation': metrics['solar'],
+                'composite_score': composite_score,
+                'elderly_population_pct': 10.0,
+                'outdoor_worker_density': 0.2,
+                'informal_settlement_density': 0.1
+            }])
+            
+            if risk_model:
+                risk_index = float(risk_model.predict(features)[0])
+                risk_index = max(0.0, min(1.0, risk_index))
+            else:
+                risk_index = 0.5 # fallback
+                
+            if risk_index < 0.2: tier = "Low"
+            elif risk_index < 0.4: tier = "Moderate"
+            elif risk_index < 0.6: tier = "High"
+            elif risk_index < 0.8: tier = "Very High"
+            else: tier = "Extreme"
+            
+            forecasts.append(DailyForecast(
+                day=day_idx,
+                predicted_hospitalization_risk=round(risk_index, 4),
+                risk_tier=tier,
+                temperature_c=round(metrics['temp'], 1),
+                relative_humidity=round(metrics['rh'], 1),
+                wbgt_c=round(wbgt, 1),
+                hi_c=round(hi, 1),
+                utci_c=round(utci_val, 1),
+                composite_score=round(composite_score, 1)
+            ))
+            
+        return WardLocation(
+            ward_name=name,
+            lat=lat,
+            lng=lon,
+            elderly_pct=10.0,
+            outdoor_pct=0.2,
+            informal_pct=0.1,
+            forecasts=forecasts
+        )
 
 @router.get("/api/alerts/logs")
 def fetch_alert_logs(limit: int = 50):
